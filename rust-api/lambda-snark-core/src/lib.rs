@@ -200,7 +200,7 @@ mod tests {
             Profile::RingB {
                 n: 256,
                 k: 2,
-                q: 12289,
+                q: 17592186044417,  // Must be > 2^24
                 sigma: 3.19,
             },
         );
@@ -212,7 +212,7 @@ mod tests {
             Profile::RingB {
                 n: 256,
                 k: 2,
-                q: 12289,
+                q: 17592186044417,
                 sigma: 1.0,
             },
         );

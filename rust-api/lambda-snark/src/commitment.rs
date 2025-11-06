@@ -1,6 +1,6 @@
 //! LWE commitment wrapper.
 
-use crate::{Error, LweContext};
+use crate::{Error, LweContext, CoreError};
 use lambda_snark_core::Field;
 use lambda_snark_sys as ffi;
 use std::slice;
@@ -30,7 +30,7 @@ impl Commitment {
         };
         
         if inner.is_null() {
-            return Err(Error::Core(lambda_snark_core::Error::CommitmentFailed));
+            return Err(Error::Core(CoreError::CommitmentFailed));
         }
         
         Ok(Commitment { inner })
@@ -66,9 +66,9 @@ mod tests {
         let params = Params::new(
             SecurityLevel::Bits128,
             Profile::RingB {
-                n: 256,
+                n: 4096,  // SEAL requires n >= 1024
                 k: 2,
-                q: 12289,
+                q: 17592186044417,  // 2^44 + 1 (prime, > 2^24)
                 sigma: 3.19,
             },
         );

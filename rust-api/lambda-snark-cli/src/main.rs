@@ -123,8 +123,7 @@ fn main() -> anyhow::Result<()> {
             println!("ΛSNARK-R v{}", env!("CARGO_PKG_VERSION"));
             println!();
             println!("Architecture: Hybrid (C++ Core + Rust API)");
-            println!("C++ Compiler: {}", env!("CARGO_CFG_TARGET_ENV"));
-            println!("Rust Version: {}", env!("CARGO_PKG_RUST_VERSION"));
+            println!("Target: {}", std::env::var("TARGET").unwrap_or_else(|_| "unknown".to_string()));
             println!();
             println!("Features:");
             println!("  - Post-quantum security (Module-LWE/SIS)");

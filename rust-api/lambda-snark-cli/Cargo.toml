@@ -1,6 +1,3 @@
-[workspace]
-members = ["lambda-snark-cli"]
-
 [package]
 name = "lambda-snark-cli"
 version.workspace = true

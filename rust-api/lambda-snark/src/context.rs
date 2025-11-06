@@ -1,6 +1,7 @@
 //! LWE context wrapper.
 
-use lambda_snark_core::{Error, Params, Profile};
+use lambda_snark_core::{Params, Profile};
+use crate::{Error, CoreError};
 use lambda_snark_sys as ffi;
 use std::ptr;
 
@@ -12,7 +13,7 @@ pub struct LweContext {
 impl LweContext {
     /// Create new LWE context from parameters.
     pub fn new(params: Params) -> Result<Self, Error> {
-        params.validate()?;
+        params.validate().map_err(Error::Core)?;
         
         // Convert Rust params to C params
         let c_params = ffi::PublicParams {
@@ -44,7 +45,7 @@ impl LweContext {
         let inner = unsafe { ffi::lwe_context_create(&c_params) };
         
         if inner.is_null() {
-            return Err(Error::FfiError);
+            return Err(Error::Core(CoreError::FfiError));
         }
         
         Ok(LweContext { inner })
@@ -77,9 +78,9 @@ mod tests {
         let params = Params::new(
             SecurityLevel::Bits128,
             Profile::RingB {
-                n: 256,
+                n: 4096,  // SEAL requires n >= 1024
                 k: 2,
-                q: 12289,
+                q: 17592186044417,  // 2^44 + 1 (prime, > 2^24)
                 sigma: 3.19,
             },
         );

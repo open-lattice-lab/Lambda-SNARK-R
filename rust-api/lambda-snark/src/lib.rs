@@ -6,29 +6,30 @@
 //! # Quick Start
 //!
 //! ```no_run
-//! use lambda_snark::{Params, Profile, SecurityLevel, setup, prove, verify};
+//! use lambda_snark::{Params, Profile, SecurityLevel, Field, setup, prove, verify};
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // Setup parameters
 //! let params = Params::new(
 //!     SecurityLevel::Bits128,
 //!     Profile::RingB {
-//!         n: 256,
+//!         n: 4096,
 //!         k: 2,
-//!         q: 12289,
+//!         q: 17592186044417,  // 2^44 + 1 (prime)
 //!         sigma: 3.19,
 //!     },
 //! );
 //!
 //! let (pk, vk) = setup(params)?;
 //!
-//! // Prove a * b = c (R1CS)
-//! let public_input = vec![1, 91];  // (1, 91)
-//! let witness = vec![7, 13];       // a=7, b=13, c=91
+//! // Prove a * b = c (R1CS) - NOT YET IMPLEMENTED
+//! let public_input = vec![Field::new(1), Field::new(91)];  // (1, 91)
+//! let witness = vec![Field::new(7), Field::new(13)];       // a=7, b=13, c=91
 //!
-//! let proof = prove(&pk, &public_input, &witness)?;
-//! let valid = verify(&vk, &public_input, &proof)?;
-//! assert!(valid);
+//! // TODO: prover not yet implemented
+//! // let proof = prove(&pk, &public_input, &witness)?;
+//! // let valid = verify(&vk, &public_input, &proof)?;
+//! // assert!(valid);
 //! # Ok(())
 //! # }
 //! ```
@@ -55,7 +56,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![warn(missing_docs, rust_2018_idioms)]
 
-pub use lambda_snark_core::{Error, Field, Params, Profile, SecurityLevel, Witness};
+pub use lambda_snark_core::{Field, Params, Profile, SecurityLevel, Witness};
+pub use lambda_snark_core::Error as CoreError;
 
 mod commitment;
 mod context;
@@ -70,7 +72,7 @@ use thiserror::Error as ThisError;
 pub enum Error {
     /// Core error.
     #[error(transparent)]
-    Core(#[from] lambda_snark_core::Error),
+    Core(#[from] CoreError),
     
     /// FFI error.
     #[error("FFI call failed: {0}")]
@@ -151,9 +153,9 @@ mod tests {
         let params = Params::new(
             SecurityLevel::Bits128,
             Profile::RingB {
-                n: 256,
+                n: 4096,  // SEAL requires n >= 1024
                 k: 2,
-                q: 12289,
+                q: 17592186044417,  // 2^44 + 1 (prime, > 2^24)
                 sigma: 3.19,
             },
         );

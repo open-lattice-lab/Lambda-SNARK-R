@@ -16,6 +16,17 @@ fn main() {
     println!("cargo:rustc-link-search=native={}/lib64", dst.display());
     println!("cargo:rustc-link-lib=static=lambda_snark_core");
     
+    // Link SEAL (from vcpkg) - use absolute path
+    let vcpkg_lib = PathBuf::from("../../vcpkg/installed/x64-linux/lib")
+        .canonicalize()
+        .expect("Failed to find vcpkg lib directory");
+    println!("cargo:rustc-link-search=native={}", vcpkg_lib.display());
+    println!("cargo:rustc-link-lib=static=seal-4.1");
+    println!("cargo:rustc-link-lib=static=zstd");
+    println!("cargo:rustc-link-lib=dylib=z");  // system zlib
+    println!("cargo:rustc-link-lib=dylib=ntl");  // system NTL
+    println!("cargo:rustc-link-lib=dylib=gmp");  // system GMP (NTL dependency)
+    
     // Link C++ standard library
     let target = env::var("TARGET").unwrap();
     if target.contains("apple") {
@@ -29,6 +40,13 @@ fn main() {
         .header("../../cpp-core/include/lambda_snark/types.h")
         .header("../../cpp-core/include/lambda_snark/commitment.h")
         .header("../../cpp-core/include/lambda_snark/ntt.h")
+        .clang_arg("-x")
+        .clang_arg("c++")
+        .clang_arg("-std=c++17")
+        .clang_arg("-I../../cpp-core/include")
+        .clang_arg("-I/usr/include/c++/14")
+        .clang_arg("-I/usr/include/x86_64-linux-gnu/c++/14")
+        .clang_arg("-I/usr/lib/gcc/x86_64-linux-gnu/14/include")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .allowlist_function("lwe_.*")
         .allowlist_function("ntt_.*")
