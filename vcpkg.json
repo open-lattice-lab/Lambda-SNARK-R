@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "lambda-snark-r",
+  "version-string": "0.1.0-alpha",
+  "description": "Post-quantum SNARK system based on Module-LWE/SIS for R1CS",
+  "homepage": "https://github.com/SafeAGI-lab/-SNARK-R",
+  "license": "Apache-2.0 OR MIT",
+  "dependencies": [
+    "seal",
+    {
+      "name": "gtest",
+      "default-features": false
+    }
+  ],
+  "builtin-baseline": "c76ea2f16f17f457721dfba9c0dae728fd32fd31"
+}
