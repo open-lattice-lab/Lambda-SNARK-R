@@ -1,0 +1,9 @@
+{
+  "description": "Expected verification result",
+  "valid": true,
+  "zero_knowledge": {
+    "verifier_learns_nothing_about": ["a", "b"],
+    "verifier_only_knows": "c = 91"
+  },
+  "comment": "Proof reveals nothing about factorization"
+}

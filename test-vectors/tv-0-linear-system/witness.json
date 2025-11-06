@@ -1,0 +1,9 @@
+{
+  "description": "Private witness: solution vector z",
+  "z": [1, 2, 3, 4, 5],
+  "verification": {
+    "Az": [5, 11, 17, 23, 29],
+    "matches_b": true
+  },
+  "comment": "This is the secret that prover knows but verifier doesn't"
+}

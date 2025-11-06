@@ -1,0 +1,26 @@
+{
+  "description": "TV-1: Multiplication 7 × 13 = 91",
+  "purpose": "Prove knowledge of factorization without revealing factors",
+  "random_seed": "0xCAFEBABE",
+  "security_level": 128,
+  "profile": {
+    "type": "RingB",
+    "n": 4096,
+    "k": 2,
+    "q": 17592186044417,
+    "sigma": 3.19
+  },
+  "r1cs": {
+    "description": "Simple multiplication gate: w₁ · w₂ = w₃",
+    "variables": ["1", "a", "b", "c"],
+    "constraints": [
+      {
+        "A": [0, 1, 0, 0],
+        "B": [0, 0, 1, 0],
+        "C": [0, 0, 0, 1],
+        "comment": "a · b = c"
+      }
+    ]
+  },
+  "comment": "Classic R1CS example: prove you know factors of 91"
+}

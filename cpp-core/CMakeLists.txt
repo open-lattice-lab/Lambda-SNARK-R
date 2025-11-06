@@ -173,6 +173,10 @@ if(LAMBDA_SNARK_BUILD_TESTS)
     add_executable(test_ntt tests/test_ntt.cpp)
     target_link_libraries(test_ntt PRIVATE lambda_snark_core GTest::gtest_main)
     add_test(NAME test_ntt COMMAND test_ntt)
+    
+    add_executable(test_conformance tests/test_conformance.cpp)
+    target_link_libraries(test_conformance PRIVATE lambda_snark_core GTest::gtest_main)
+    add_test(NAME test_conformance COMMAND test_conformance)
 endif()
 
 # --- Benchmarks ---

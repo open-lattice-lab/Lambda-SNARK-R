@@ -1,0 +1,14 @@
+{
+  "description": "Expected verification result",
+  "valid": true,
+  "zero_knowledge": {
+    "verifier_learns_nothing_about": ["θ₁", "θ₂", "θ₃", "θ₄"],
+    "verifier_only_knows": "plaquette is closed (gauge invariant)"
+  },
+  "physics_interpretation": {
+    "statement": "Wilson loop around plaquette equals 1",
+    "gauge_invariance": "Configuration respects U(1) gauge symmetry",
+    "privacy": "Gauge field values remain hidden"
+  },
+  "comment": "Proof of gauge invariance without revealing field configuration"
+}

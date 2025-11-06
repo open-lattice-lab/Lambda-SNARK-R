@@ -1,0 +1,15 @@
+{
+  "description": "Private witness: factors a=7, b=13",
+  "witness": [7, 13],
+  "full_assignment": {
+    "1": 1,
+    "a": 7,
+    "b": 13,
+    "c": 91
+  },
+  "verification": {
+    "a_times_b": 91,
+    "matches_public_c": true
+  },
+  "comment": "Prover knows 7 × 13 = 91, verifier only sees 91"
+}

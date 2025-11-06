@@ -1,0 +1,5 @@
+{
+  "description": "Expected verification result",
+  "valid": true,
+  "comment": "Verifier should accept this proof"
+}

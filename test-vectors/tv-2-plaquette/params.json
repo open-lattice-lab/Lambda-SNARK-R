@@ -1,0 +1,44 @@
+{
+  "description": "TV-2: Plaquette Constraint θ₁ + θ₂ - θ₃ - θ₄ = 0",
+  "purpose": "Lattice gauge theory: prove plaquette closure without revealing angles",
+  "random_seed": "0x8BADF00D",
+  "security_level": 128,
+  "profile": {
+    "type": "RingB",
+    "n": 4096,
+    "k": 2,
+    "q": 17592186044417,
+    "sigma": 3.19
+  },
+  "physics_context": {
+    "theory": "U(1) lattice gauge theory",
+    "geometry": "2D square lattice plaquette",
+    "constraint": "Wilson loop = 1 ⟹ θ₁ + θ₂ - θ₃ - θ₄ = 0 (mod 2π)",
+    "discretization": "Angles in units of π/1000"
+  },
+  "r1cs": {
+    "description": "Linear constraint on 4 angles",
+    "variables": ["1", "θ₁", "θ₂", "θ₃", "θ₄"],
+    "constraints": [
+      {
+        "A": [0, 1, 0, 0, 0],
+        "B": [1, 0, 0, 0, 0],
+        "C": [0, 1, 0, 0, 0],
+        "comment": "θ₁ · 1 = θ₁"
+      },
+      {
+        "A": [0, 0, 1, 0, 0],
+        "B": [1, 0, 0, 0, 0],
+        "C": [0, 0, 1, 0, 0],
+        "comment": "θ₂ · 1 = θ₂"
+      },
+      {
+        "A": [0, 1, 1, -1, -1],
+        "B": [1, 0, 0, 0, 0],
+        "C": [0, 0, 0, 0, 0],
+        "comment": "(θ₁ + θ₂ - θ₃ - θ₄) · 1 = 0"
+      }
+    ]
+  },
+  "comment": "Prove gauge invariance: plaquette is closed"
+}

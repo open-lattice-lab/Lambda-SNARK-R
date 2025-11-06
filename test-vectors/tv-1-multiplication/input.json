@@ -1,0 +1,5 @@
+{
+  "description": "Public input: product c = 91",
+  "public": [1, 91],
+  "comment": "Everyone knows the product is 91, but factors are secret"
+}

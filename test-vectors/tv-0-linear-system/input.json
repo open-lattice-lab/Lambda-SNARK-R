@@ -1,0 +1,5 @@
+{
+  "description": "Public input: vector b from Az = b",
+  "b": [5, 11, 17, 23, 29],
+  "comment": "Prover must find z such that Az = b"
+}

@@ -1,0 +1,21 @@
+{
+  "description": "Private witness: four angles on plaquette edges",
+  "witness": {
+    "θ₁": 314,
+    "θ₂": 628,
+    "θ₃": 471,
+    "θ₄": 471
+  },
+  "units": "π/1000 radians",
+  "physical_values": {
+    "θ₁": "0.314π ≈ π/10",
+    "θ₂": "0.628π ≈ 2π/10",
+    "θ₃": "0.471π ≈ 3π/20",
+    "θ₄": "0.471π ≈ 3π/20"
+  },
+  "verification": {
+    "sum": "314 + 628 - 471 - 471 = 0",
+    "constraint_satisfied": true
+  },
+  "comment": "Secret gauge configuration satisfying plaquette constraint"
+}

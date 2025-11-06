@@ -1,0 +1,10 @@
+{
+  "description": "Public input: plaquette closure constraint",
+  "public": [1],
+  "constraint": {
+    "type": "linear",
+    "equation": "θ₁ + θ₂ - θ₃ - θ₄ = 0",
+    "coefficients": [1, 1, -1, -1]
+  },
+  "comment": "Verifier knows the constraint must hold, but not individual angles"
+}
