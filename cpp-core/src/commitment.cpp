@@ -10,6 +10,7 @@
  */
 
 #include "lambda_snark/commitment.h"
+#include <algorithm>
 #include <cstring>
 #include <memory>
 

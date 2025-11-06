@@ -45,16 +45,26 @@ TEST_F(NttTest, InverseNttBasic) {
 }
 
 TEST_F(NttTest, ForwardInverseIdentity) {
-    std::vector<uint64_t> original = {1, 2, 3, 4, 0, 0, 0, 0};
+    std::vector<uint64_t> original = {1, 2, 3, 4, 5, 6, 7, 8};
     original.resize(n, 0);
     
     std::vector<uint64_t> transformed = original;
     
-    ntt_forward(ctx, transformed.data(), n);
-    ntt_inverse(ctx, transformed.data(), n);
+    // Forward NTT
+    int fwd_result = ntt_forward(ctx, transformed.data(), n);
+    EXPECT_EQ(fwd_result, 0);
     
-    // After forward + inverse, should recover original (up to scaling)
-    // TODO: Implement proper test once NTT is functional
+    // Inverse NTT
+    int inv_result = ntt_inverse(ctx, transformed.data(), n);
+    EXPECT_EQ(inv_result, 0);
+    
+    // Should recover original coefficients
+    for (uint32_t i = 0; i < n; ++i) {
+        EXPECT_EQ(transformed[i], original[i]) 
+            << "Mismatch at index " << i 
+            << ": expected " << original[i] 
+            << ", got " << transformed[i];
+    }
 }
 
 TEST_F(NttTest, PointwiseMultiplication) {
