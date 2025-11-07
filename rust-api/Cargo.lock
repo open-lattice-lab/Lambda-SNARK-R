@@ -545,6 +545,7 @@ dependencies = [
 name = "lambda-snark-core"
 version = "0.1.0"
 dependencies = [
+ "lambda-snark-sys",
  "serde",
  "zeroize",
 ]

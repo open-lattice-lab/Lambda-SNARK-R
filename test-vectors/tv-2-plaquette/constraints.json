@@ -1,0 +1,42 @@
+{
+  "description": "R1CS constraints for plaquette: θ₁ + θ₂ - θ₃ - θ₄ = 0",
+  "comment": "Witness vector z = [1, θ₁, θ₂, θ₃, θ₄] where z[0]=1 is constant",
+  "m": 1,
+  "n": 5,
+  "witness_structure": {
+    "z[0]": "constant 1",
+    "z[1]": "private θ₁",
+    "z[2]": "private θ₂",
+    "z[3]": "private θ₃",
+    "z[4]": "private θ₄"
+  },
+  "constraints": [
+    {
+      "id": 0,
+      "description": "1 × (θ₁ + θ₂ - θ₃ - θ₄) = 0",
+      "note": "Linear constraint encoded as quadratic: A·z = [1], B·z = [sum], C·z = [0]",
+      "A": [
+        {"row": 0, "col": 0, "value": 1}
+      ],
+      "B": [
+        {"row": 0, "col": 1, "value": 1},
+        {"row": 0, "col": 2, "value": 1},
+        {"row": 0, "col": 3, "value": -1},
+        {"row": 0, "col": 4, "value": -1}
+      ],
+      "C": []
+    }
+  ],
+  "verification": {
+    "witness": [1, 314, 628, 471, 471],
+    "Az": [1],
+    "Bz_components": "314 + 628 - 471 - 471 = 0",
+    "Bz": [0],
+    "Cz": [0],
+    "check": "1 × 0 = 0 ✓"
+  },
+  "modular_arithmetic": {
+    "q": 17592186044417,
+    "note": "All operations in field F_q = Z/(2^44+1)Z"
+  }
+}

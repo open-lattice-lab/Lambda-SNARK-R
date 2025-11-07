@@ -4,6 +4,7 @@
 //! - Field elements
 //! - Parameter profiles
 //! - Error types
+//! - R1CS constraint system
 //!
 //! # no_std Support
 //!
@@ -22,6 +23,12 @@ use alloc::vec::Vec;
 
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
+
+// Re-export lambda-snark-sys to propagate link flags
+#[doc(hidden)]
+pub use lambda_snark_sys;
+
+pub mod r1cs;
 
 /// Field element in Z_q.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Zeroize)]

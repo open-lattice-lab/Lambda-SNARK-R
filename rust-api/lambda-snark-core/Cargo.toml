@@ -11,6 +11,7 @@ description = "Core types for ΛSNARK-R (#![no_std] compatible)"
 name = "lambda_snark_core"
 
 [dependencies]
+lambda-snark-sys = { path = "../lambda-snark-sys" }
 serde = { workspace = true, default-features = false, features = ["derive"] }
 zeroize = { workspace = true, default-features = false }
 

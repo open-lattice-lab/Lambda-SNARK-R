@@ -98,6 +98,7 @@ add_library(lambda_snark_core
     src/ntt.cpp
     src/lincheck.cpp
     src/mulcheck.cpp
+    src/r1cs.cpp
     src/ffi.cpp
     src/utils.cpp
 )
@@ -173,6 +174,10 @@ if(LAMBDA_SNARK_BUILD_TESTS)
     add_executable(test_ntt tests/test_ntt.cpp)
     target_link_libraries(test_ntt PRIVATE lambda_snark_core GTest::gtest_main)
     add_test(NAME test_ntt COMMAND test_ntt)
+    
+    add_executable(test_r1cs tests/test_r1cs.cpp)
+    target_link_libraries(test_r1cs PRIVATE lambda_snark_core GTest::gtest_main)
+    add_test(NAME test_r1cs COMMAND test_r1cs)
     
     add_executable(test_conformance tests/test_conformance.cpp)
     target_link_libraries(test_conformance PRIVATE lambda_snark_core GTest::gtest_main)
