@@ -67,6 +67,7 @@ mod opening;
 pub mod sparse_matrix;
 pub mod r1cs;
 pub mod circuit;
+mod ntt;
 
 pub use commitment::Commitment;
 pub use context::LweContext;
@@ -93,6 +94,10 @@ pub enum Error {
     /// Invalid proof.
     #[error("Invalid proof")]
     InvalidProof,
+    
+    /// Invalid dimensions (e.g., NTT modular inverse failure).
+    #[error("Invalid dimensions or parameters")]
+    InvalidDimensions,
 }
 
 /// Proving key (stub).
