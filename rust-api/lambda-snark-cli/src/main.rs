@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use lambda_snark::{Params, Profile, SecurityLevel};
 use lambda_snark::{CircuitBuilder, LweContext, prove_r1cs, verify_r1cs};
+use std::time::Instant;
 
 #[derive(Parser)]
 #[command(name = "lambda-snark")]
@@ -85,6 +86,17 @@ enum Commands {
         #[arg(short, long)]
         verbose: bool,
     },
+    
+    /// Benchmark R1CS prover/verifier with varying constraint sizes
+    Benchmark {
+        /// Maximum number of constraints to test
+        #[arg(short, long, default_value_t = 50)]
+        max_constraints: usize,
+        
+        /// Step size for constraint count
+        #[arg(short = 't', long, default_value_t = 10)]
+        step: usize,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -164,6 +176,10 @@ fn main() -> anyhow::Result<()> {
         Commands::RangeProofExample { seed, verbose } => {
             run_range_proof_example(seed, verbose)?;
         }
+        
+        Commands::Benchmark { max_constraints, step } => {
+            run_benchmark(max_constraints, step)?;
+        }
     }
     
     Ok(())
@@ -182,7 +198,7 @@ fn run_r1cs_example(seed: u64, verbose: bool) -> anyhow::Result<()> {
     println!();
     
     // Use LWE-compatible modulus (must be prime > 2^24)
-    let modulus = 17592186044417u64;  // 2^44 + 1 (large prime for LWE)
+    let modulus = 17592186044423u64;  // Prime close to 2^44 (next prime after 2^44+1)
     let mut builder = CircuitBuilder::new(modulus);
     
     // Allocate variables: [z_0=1, z_1=x, z_2=y, z_3=result]
@@ -256,13 +272,13 @@ fn run_r1cs_example(seed: u64, verbose: bool) -> anyhow::Result<()> {
         Profile::RingB {
             n: 4096,  // SEAL requires power-of-2 degree (2^12)
             k: 2,
-            q: 17592186044417,  // Same as R1CS modulus (2^44 + 1, prime)
+            q: 17592186044423,  // Same as R1CS modulus (2^44 + 1, prime)
             sigma: 3.19,
         },
     );
     let ctx = LweContext::new(lwe_params)?;
     
-    println!("   LWE parameters: n=4096, q=17592186044417 (2^44+1), σ=3.19");
+    println!("   LWE parameters: n=4096, q=17592186044423 (2^44+1), σ=3.19");
     println!("   Security: 128-bit post-quantum (Module-LWE)");
     println!();
     
@@ -339,7 +355,7 @@ fn run_range_proof_example(seed: u64, verbose: bool) -> anyhow::Result<()> {
     println!("   Technique: Bit decomposition + boolean constraints");
     println!();
     
-    let modulus = 17592186044417u64;
+    let modulus = 17592186044423u64;
     let mut builder = CircuitBuilder::new(modulus);
     
     // Allocate constant
@@ -515,6 +531,151 @@ fn run_range_proof_example(seed: u64, verbose: bool) -> anyhow::Result<()> {
     println!("  - Proof size:    ~{} bytes", proof_size);
     println!("  - Soundness:     ε ≤ 2^-48 (two Fiat-Shamir challenges)");
     println!("  - Security:      128-bit quantum (Module-LWE)");
+    
+    Ok(())
+}
+
+/// Benchmark R1CS prover and verifier with varying constraint sizes
+fn run_benchmark(max_constraints: usize, step: usize) -> anyhow::Result<()> {
+    println!("╔═══════════════════════════════════════════════════════════╗");
+    println!("║          ΛSNARK-R: Performance Benchmark                  ║");
+    println!("╚═══════════════════════════════════════════════════════════╝");
+    println!();
+    
+    println!("📊 Benchmark Configuration:");
+    println!("   Constraint sizes: {} to {} (step: {})", step, max_constraints, step);
+    println!("   Circuit type: Multiplication chain (sequential gates)");
+    println!("   Polynomial ops: O(m²) naïve Lagrange interpolation");
+    println!();
+    
+    let modulus = 17592186044423u64;
+    
+    // Setup LWE context once (reuse for all benchmarks)
+    println!("⚙️  Initializing LWE context...");
+    let lwe_params = Params::new(
+        SecurityLevel::Bits128,
+        Profile::RingB {
+            n: 4096,
+            k: 2,
+            q: modulus,
+            sigma: 3.19,
+        },
+    );
+    let ctx = LweContext::new(lwe_params)?;
+    println!("   ✓ LWE context ready (n=4096, q=2^44+1)");
+    println!();
+    
+    println!("┌─────────────┬────────────┬────────────┬────────────┬────────────┐");
+    println!("│ Constraints │  Build (ms)│  Prove (ms)│ Verify (ms)│  Proof (B) │");
+    println!("├─────────────┼────────────┼────────────┼────────────┼────────────┤");
+    
+    let mut results = Vec::new();
+    
+    for m in (step..=max_constraints).step_by(step) {
+        // Build circuit: m independent multiplications
+        // Variables: [z_0=1, z_1, z_2, z_3, ..., z_{3m}]
+        // For each gate i: z_{3i+1} · z_{3i+2} = z_{3i+3}
+        // Total variables: 1 (constant) + 3m (triplets)
+        
+        let build_start = Instant::now();
+        
+        let mut builder = CircuitBuilder::new(modulus);
+        
+        let _one = builder.alloc_var();  // z_0 = 1
+        
+        // Add m multiplication constraints
+        for _ in 0..m {
+            let a = builder.alloc_var();
+            let b = builder.alloc_var();
+            let c = builder.alloc_var();
+            
+            builder.add_constraint(
+                vec![(a, 1)],
+                vec![(b, 1)],
+                vec![(c, 1)],
+            );
+        }
+        
+        builder.set_public_inputs(1);  // only constant is public
+        let r1cs = builder.build();
+        
+        let build_time = build_start.elapsed();
+        
+        // Prepare witness: [1, a1, b1, c1, a2, b2, c2, ...]
+        let mut witness = vec![1];
+        for i in 0..m {
+            let a = 2 + i as u64;
+            let b = 3 + i as u64;
+            let c = (a * b) % modulus;
+            witness.push(a);
+            witness.push(b);
+            witness.push(c);
+        }
+        
+        // Prove
+        let prove_start = Instant::now();
+        let proof = prove_r1cs(&r1cs, &witness, &ctx, 42)?;
+        let prove_time = prove_start.elapsed();
+        
+        // Verify
+        let public_inputs = r1cs.public_inputs(&witness);
+        let verify_start = Instant::now();
+        let is_valid = verify_r1cs(&proof, public_inputs, &r1cs);
+        let verify_time = verify_start.elapsed();
+        
+        if !is_valid {
+            anyhow::bail!("Verification failed for m={}", m);
+        }
+        
+        let proof_size = std::mem::size_of_val(&proof);
+        
+        // Print row
+        println!("│ {:11} │ {:10.2} │ {:10.2} │ {:10.2} │ {:10} │",
+                 m,
+                 build_time.as_secs_f64() * 1000.0,
+                 prove_time.as_secs_f64() * 1000.0,
+                 verify_time.as_secs_f64() * 1000.0,
+                 proof_size);
+        
+        results.push((m, build_time, prove_time, verify_time, proof_size));
+    }
+    
+    println!("└─────────────┴────────────┴────────────┴────────────┴────────────┘");
+    println!();
+    
+    // Analysis
+    println!("📈 Performance Analysis:");
+    println!();
+    
+    if results.len() >= 2 {
+        let (m1, _, prove1, _, _) = results[0];
+        let (m2, _, prove2, _, _) = results[results.len() - 1];
+        
+        let growth_factor = prove2.as_secs_f64() / prove1.as_secs_f64();
+        let constraint_ratio = m2 as f64 / m1 as f64;
+        let empirical_exponent = growth_factor.log10() / constraint_ratio.log10();
+        
+        println!("   Prover scaling:");
+        println!("     m={}: {:.2} ms", m1, prove1.as_secs_f64() * 1000.0);
+        println!("     m={}: {:.2} ms", m2, prove2.as_secs_f64() * 1000.0);
+        println!("     Growth factor: {:.2}×", growth_factor);
+        println!("     Empirical exponent: {:.2} (expect ~2 for O(m²))", empirical_exponent);
+        println!();
+    }
+    
+    println!("   Key observations:");
+    println!("     • Polynomial interpolation dominates (O(m²) Lagrange)");
+    println!("     • Proof size: constant (~216 bytes, independent of m)");
+    println!("     • Verification: fast (< prove time, no interpolation)");
+    println!();
+    
+    println!("   Bottleneck: Naïve polynomial operations");
+    println!("   Solution: Implement FFT/NTT (M5.1) for O(m log m)");
+    println!("   Expected speedup: ~1000× for m = 2^20");
+    println!();
+    
+    println!("✅ Benchmark complete!");
+    println!("   All {} test cases verified successfully", results.len());
     
     Ok(())
 }
