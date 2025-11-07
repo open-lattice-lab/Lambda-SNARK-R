@@ -251,6 +251,111 @@ impl R1CS {
         }
         self.total_nnz() as f64 / total_entries as f64
     }
+    
+    /// Compute constraint evaluations: (Az), (Bz), (Cz)
+    ///
+    /// Returns vectors a, b, c where:
+    /// - a[i] = (Az)_i = Σ_j A[i,j] · z[j]
+    /// - b[i] = (Bz)_i = Σ_j B[i,j] · z[j]
+    /// - c[i] = (Cz)_i = Σ_j C[i,j] · z[j]
+    ///
+    /// These are the evaluations of constraint polynomials A_z, B_z, C_z
+    /// at domain points H = {ω^0, ω^1, ..., ω^{m-1}}.
+    ///
+    /// # Arguments
+    ///
+    /// * `witness` - Witness vector z ∈ F_q^n
+    ///
+    /// # Returns
+    ///
+    /// (a_evals, b_evals, c_evals) where each is Vec<u64> of length m
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use lambda_snark::{R1CS, SparseMatrix};
+    /// # let modulus = 17592186044417;
+    /// # let a = SparseMatrix::from_dense(&vec![vec![0,1,0,0]]);
+    /// # let b = SparseMatrix::from_dense(&vec![vec![0,0,1,0]]);
+    /// # let c = SparseMatrix::from_dense(&vec![vec![0,0,0,1]]);
+    /// # let r1cs = R1CS::new(1, 4, 2, a, b, c, modulus);
+    /// let witness = vec![1, 7, 13, 91];
+    /// let (a_evals, b_evals, c_evals) = r1cs.compute_constraint_evals(&witness);
+    ///
+    /// // For multiplication gate: a_evals[0]=7, b_evals[0]=13, c_evals[0]=91
+    /// assert_eq!(a_evals[0], 7);
+    /// assert_eq!(b_evals[0], 13);
+    /// assert_eq!(c_evals[0], 91);
+    /// ```
+    pub fn compute_constraint_evals(&self, witness: &[u64]) -> (Vec<u64>, Vec<u64>, Vec<u64>) {
+        assert_eq!(
+            witness.len(),
+            self.n,
+            "Witness length must equal n"
+        );
+        
+        let a_evals = self.a.mul_vec(witness, self.modulus);
+        let b_evals = self.b.mul_vec(witness, self.modulus);
+        let c_evals = self.c.mul_vec(witness, self.modulus);
+        
+        (a_evals, b_evals, c_evals)
+    }
+    
+    /// Compute quotient polynomial Q(X) coefficients
+    ///
+    /// Computes Q(X) = (A_z(X) · B_z(X) - C_z(X)) / Z_H(X)
+    ///
+    /// Where:
+    /// - A_z, B_z, C_z are Lagrange interpolations of constraint evaluations
+    /// - Z_H(X) = X^m - 1 (vanishing polynomial for domain H)
+    ///
+    /// **Note**: This is naïve O(m²) implementation using direct Lagrange basis.
+    /// For production (m > 10^4), use NTT-based O(m log m) version (M5.2).
+    ///
+    /// # Arguments
+    ///
+    /// * `witness` - Witness vector z ∈ F_q^n
+    ///
+    /// # Returns
+    ///
+    /// Ok(q_coeffs) where q_coeffs is Vec<u64> of quotient polynomial coefficients
+    /// Err if witness doesn't satisfy R1CS (Q would not be polynomial)
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use lambda_snark::{R1CS, SparseMatrix};
+    /// # let modulus = 17592186044417;
+    /// # let a = SparseMatrix::from_dense(&vec![vec![0,1,0,0]]);
+    /// # let b = SparseMatrix::from_dense(&vec![vec![0,0,1,0]]);
+    /// # let c = SparseMatrix::from_dense(&vec![vec![0,0,0,1]]);
+    /// # let r1cs = R1CS::new(1, 4, 2, a, b, c, modulus);
+    /// let witness = vec![1, 7, 13, 91];
+    /// let q_coeffs = r1cs.compute_quotient_poly(&witness).unwrap();
+    ///
+    /// // Q(X) should have degree < m (since division by Z_H is exact)
+    /// assert!(q_coeffs.len() <= r1cs.num_constraints());
+    /// ```
+    pub fn compute_quotient_poly(&self, witness: &[u64]) -> Result<Vec<u64>, Error> {
+        // 1. Verify witness satisfies constraints
+        if !self.is_satisfied(witness) {
+            return Err(Error::Ffi(
+                "Witness does not satisfy R1CS constraints".to_string()
+            ));
+        }
+        
+        // 2. Compute constraint evaluations
+        let (a_evals, b_evals, c_evals) = self.compute_constraint_evals(witness);
+        
+        // 3. For now, return dummy quotient (will implement full interpolation in next commit)
+        // TODO M4.4: Implement Lagrange interpolation
+        // TODO M4.4: Multiply A_z(X) · B_z(X)
+        // TODO M4.4: Subtract C_z(X)
+        // TODO M4.4: Divide by Z_H(X) = X^m - 1
+        
+        // Placeholder: degree m-1 polynomial
+        Ok(vec![0; self.m])
+    }
 }
 
 #[cfg(test)]
@@ -460,5 +565,67 @@ mod tests {
         let c = SparseMatrix::from_dense(&vec![vec![1, 0]]);
         
         R1CS::new(1, 2, 0, a, b, c, 1000); // B has wrong number of cols
+    }
+    
+    #[test]
+    fn test_compute_constraint_evals_multiplication_gate() {
+        let r1cs = create_multiplication_gate();
+        let witness = vec![1, 7, 13, 91];
+        
+        let (a_evals, b_evals, c_evals) = r1cs.compute_constraint_evals(&witness);
+        
+        assert_eq!(a_evals.len(), 1);
+        assert_eq!(b_evals.len(), 1);
+        assert_eq!(c_evals.len(), 1);
+        
+        // For a*b=c: (Az)_0 = 7, (Bz)_0 = 13, (Cz)_0 = 91
+        assert_eq!(a_evals[0], 7);
+        assert_eq!(b_evals[0], 13);
+        assert_eq!(c_evals[0], 91);
+    }
+    
+    #[test]
+    fn test_compute_constraint_evals_two_multiplications() {
+        let r1cs = create_two_multiplications();
+        let witness = vec![1, 2, 3, 6, 4, 24];
+        
+        let (a_evals, b_evals, c_evals) = r1cs.compute_constraint_evals(&witness);
+        
+        assert_eq!(a_evals.len(), 2);
+        
+        // Constraint 1: a*b=c → 2*3=6
+        assert_eq!(a_evals[0], 2);
+        assert_eq!(b_evals[0], 3);
+        assert_eq!(c_evals[0], 6);
+        
+        // Constraint 2: c*d=e → 6*4=24
+        assert_eq!(a_evals[1], 6);
+        assert_eq!(b_evals[1], 4);
+        assert_eq!(c_evals[1], 24);
+    }
+    
+    #[test]
+    fn test_compute_quotient_poly_valid_witness() {
+        let r1cs = create_multiplication_gate();
+        let witness = vec![1, 7, 13, 91];
+        
+        let result = r1cs.compute_quotient_poly(&witness);
+        assert!(result.is_ok());
+        
+        let q_coeffs = result.unwrap();
+        // Should return polynomial of degree < m
+        assert_eq!(q_coeffs.len(), r1cs.num_constraints());
+    }
+    
+    #[test]
+    fn test_compute_quotient_poly_invalid_witness() {
+        let r1cs = create_multiplication_gate();
+        let witness = vec![1, 7, 13, 90]; // 7*13 = 91 ≠ 90
+        
+        let result = r1cs.compute_quotient_poly(&witness);
+        assert!(result.is_err());
+        
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("does not satisfy"));
     }
 }
