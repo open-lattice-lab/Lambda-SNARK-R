@@ -137,14 +137,22 @@ pub struct ProofR1CS {
     /// Q(β) evaluation
     pub q_beta: u64,
     
-    /// A_z(α), B_z(α), C_z(α) evaluations
+    /// A_z(α) evaluation (left constraint polynomial at α)
     pub a_z_alpha: u64,
+    
+    /// B_z(α) evaluation (right constraint polynomial at α)
     pub b_z_alpha: u64,
+    
+    /// C_z(α) evaluation (output constraint polynomial at α)
     pub c_z_alpha: u64,
     
-    /// A_z(β), B_z(β), C_z(β) evaluations
+    /// A_z(β) evaluation (left constraint polynomial at β)
     pub a_z_beta: u64,
+    
+    /// B_z(β) evaluation (right constraint polynomial at β)
     pub b_z_beta: u64,
+    
+    /// C_z(β) evaluation (output constraint polynomial at β)
     pub c_z_beta: u64,
     
     /// Opening proof at α

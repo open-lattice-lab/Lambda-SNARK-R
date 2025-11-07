@@ -337,22 +337,25 @@ impl R1CS {
     /// assert!(q_coeffs.len() <= r1cs.num_constraints());
     /// ```
     
-    /// Evaluate polynomial at point x.
+    /// Evaluate polynomial at point x using Horner's method.
     ///
     /// # Arguments
-    /// * `poly` - Polynomial coefficients in ascending degree order
-    /// * `x` - Evaluation point
+    ///
+    /// * `poly` - Polynomial coefficients in ascending degree order [a₀, a₁, ..., aₙ]
+    /// * `x` - Evaluation point in F_q
     ///
     /// # Returns
-    /// f(x) mod modulus using Horner's method for efficiency
+    ///
+    /// f(x) mod modulus where f(X) = a₀ + a₁X + ... + aₙXⁿ
     ///
     /// # Example
+    ///
     /// ```ignore
-    /// let poly = vec![2, 3, 1]; // 2 + 3X + X²
+    /// let poly = vec![2, 3, 1]; // f(X) = 2 + 3X + X²
     /// let r1cs = R1CS::new(..., modulus: 97);
-    /// assert_eq!(r1cs.eval_poly(&poly, 0), 2);  // f(0) = 2
-    /// assert_eq!(r1cs.eval_poly(&poly, 1), 6);  // f(1) = 2+3+1 = 6
-    /// assert_eq!(r1cs.eval_poly(&poly, 2), 12); // f(2) = 2+6+4 = 12
+    /// assert_eq!(r1cs.eval_poly(&poly, 0), 2);   // f(0) = 2
+    /// assert_eq!(r1cs.eval_poly(&poly, 1), 6);   // f(1) = 2+3+1 = 6
+    /// assert_eq!(r1cs.eval_poly(&poly, 2), 12);  // f(2) = 2+6+4 = 12
     /// ```
     pub fn eval_poly(&self, poly: &[u64], x: u64) -> u64 {
         let mut result = 0u64;
@@ -367,6 +370,38 @@ impl R1CS {
         result
     }
     
+    /// Compute quotient polynomial Q(X) = (A_z(X) · B_z(X) - C_z(X)) / Z_H(X).
+    ///
+    /// This is the core operation in R1CS proving. The quotient polynomial exists
+    /// if and only if the witness satisfies all R1CS constraints.
+    ///
+    /// # Arguments
+    ///
+    /// * `witness` - Full witness vector z ∈ F_q^n (including public inputs)
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(coeffs)` - Coefficients of Q(X) in ascending degree order
+    /// * `Err` - If witness doesn't satisfy R1CS (exact division fails)
+    ///
+    /// # Complexity
+    ///
+    /// O(m²) time using naïve Lagrange interpolation.
+    /// For m > 10^4, use NTT-based version (M5.1).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use lambda_snark::{R1CS, SparseMatrix};
+    /// # let modulus = 17592186044417;
+    /// # let a = SparseMatrix::from_dense(&vec![vec![0,1,0,0]]);
+    /// # let b = SparseMatrix::from_dense(&vec![vec![0,0,1,0]]);
+    /// # let c = SparseMatrix::from_dense(&vec![vec![0,0,0,1]]);
+    /// # let r1cs = R1CS::new(1, 4, 2, a, b, c, modulus);
+    /// let witness = vec![1, 7, 13, 91]; // 7 * 13 = 91
+    /// let q = r1cs.compute_quotient_poly(&witness).unwrap();
+    /// assert!(q.len() <= r1cs.num_constraints());
+    /// ```
     pub fn compute_quotient_poly(&self, witness: &[u64]) -> Result<Vec<u64>, Error> {
         // 1. Verify witness satisfies constraints
         if !self.is_satisfied(witness) {
