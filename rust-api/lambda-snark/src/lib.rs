@@ -61,13 +61,13 @@ pub use lambda_snark_core::Error as CoreError;
 
 mod commitment;
 mod context;
-mod polynomial;
+pub mod polynomial;
 mod challenge;
 mod opening;
 pub mod sparse_matrix;
 pub mod r1cs;
 pub mod circuit;
-mod ntt;
+pub mod ntt;
 
 pub use commitment::Commitment;
 pub use context::LweContext;
