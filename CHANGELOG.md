@@ -7,13 +7,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [0.1.0-alpha] - 2025-11-08
 
-### Planned (M5-M7)
-- **M5.1**: FFT/NTT polynomial operations for O(m log m) performance (ETA: Dec 2025)
-- **M5.2**: Zero-knowledge extension with polynomial blinding (ETA: Dec 2025)
-- **M7**: Comprehensive test suite (property-based, fuzzing, regression) (ETA: Jan 2026)
-- **M7**: Alpha release (0.1.0-alpha) to crates.io (ETA: Jan 2026)
+**Status**: Alpha release — Core functionality complete, optimization ongoing.
+
+### Added
+
+#### M5: R1CS + Quotient Polynomial Implementation
+- **M5.1**: NTT-optimized quotient polynomial computation (O(m log m))
+  - Cooley-Tukey FFT with modular arithmetic
+  - Configurable via `fft-ntt` feature flag
+  - Prime field: `NTT_MODULUS = 2^64 - 2^32 + 1` (18446744069414584321)
+- **M5.2**: Rust API for R1CS verification
+  - `R1CSInstance`: constraint system definition
+  - `verify()`: compute quotient polynomial + validate divisibility
+  - Support for arbitrary field modulus (with primality requirement)
+
+#### M7: Testing & Quality Assurance
+- **M7.1**: Property-based testing (proptest) — Commit `9598b16`
+  - 10 property tests covering R1CS operations
+  - 2,560 random test cases (256 cases × 10 tests)
+  - Properties: polynomial correctness, field arithmetic, edge cases
+- **M7.3**: Security audit — Commit `2187e63`
+  - VULN-001 (Fixed): Non-prime modulus DoS
+  - VULN-002 (Fixed): Degree mismatch acceptance
+  - VULN-003 (Fixed): Zero witness bypass
+  - Input validation hardening
+- **M7.4**: Benchmark infrastructure
+  - Criterion.rs benchmarks: `lagrange_baseline`, `ntt_optimized`, `simple_test`
+  - Performance tracking for regression detection
+
+### Fixed
+
+#### M5.1.5: Critical Benchmark Bugs — Commit `c06f6f0`
+- **VULN-MOD-001** (Critical): Non-prime modulus bug
+  - **Root Cause**: Legacy modulus `17592186044417 = 17 × 1034834472613` (composite)
+  - **Impact**: Lagrange interpolation panics at m ≥ 17 (modular inverse failure)
+  - **Fix**: Use `NTT_MODULUS` (verified prime via Miller-Rabin, k=10 rounds)
+  - **Security**: Prevents DoS via composite modulus injection
+- **Criterion "0 tests"** bug
+  - **Root Cause**: Missing `[[bench]]` sections in Cargo.toml
+  - **Fix**: Added explicit declarations for `ntt_speedup` and `simple_test`
+
+### Performance
+
+#### M5.1.5: NTT Benchmark Results
+
+**Comparison**: NTT O(m log m) vs Baseline Lagrange O(m²)
+
+| Constraints (m) | Lagrange | NTT | Speedup | Status |
+|-----------------|----------|-----|---------|--------|
+| 16 | 14.8 µs | 12.3 µs | **1.21× faster** | ✅ |
+| 64 | 88.4 µs | 85.6 µs | **1.03× faster** | ✅ |
+| 256 | 1.17 ms | 1.15 ms | **1.02× faster** | ✅ |
+| 1024 | 14.4 ms | 15.8 ms | **0.91× (10% slower)** | ⚠️ |
+| 4096 | ~230 ms | 258 ms | **0.88× (12% slower)** | ⚠️ |
+
+**Analysis**: 
+- NTT implementation has high overhead (non-in-place transforms, twiddle factor recomputation, cache-unfriendly access)
+- For practical circuit sizes (m < 4096), baseline Lagrange is competitive or faster
+- **Optimization planned for v0.2.0**: in-place NTT, precomputed twiddles, cache optimization
+
+**Honest Assessment**: Current NTT does NOT achieve expected 100-1000× speedup. Use baseline Lagrange for production until v0.2.0.
+
+### Documentation
+
+- **Architecture**: `docs/vdad/` (Value-Driven Analysis & Development)
+  - M5-M7 milestone reports
+  - `m5.1.5-benchmark-bug-report.md`: 400+ lines bug analysis
+  - `m5.1.5-benchmark-results.md`: Detailed performance report
+- **Security**: `docs/security/` (vulnerability disclosures, mitigations)
+
+### Known Limitations
+
+1. **NTT Performance** (v0.2.0 optimization target):
+   - Current implementation slower than Lagrange for m ≥ 1024
+   - Root cause: high constant factors in O(m log m) implementation
+   - Workaround: Use baseline Lagrange (disable `fft-ntt` feature)
+
+2. **Constraint System Size**:
+   - Tested up to m = 4096 constraints
+   - Larger circuits (m > 10⁶) may require memory optimization
+
+---
+
+## [Unreleased] - Roadmap
+
+### v0.1.1 (Patch)
+- Add `should_use_ntt()` heuristic (disable NTT for m < 4096)
+- Regression test for VULN-MOD-001 (composite modulus)
+- CI: Performance benchmark tracking
+
+### v0.2.0 (Optimization)
+- **NTT Optimization**:
+  - In-place Cooley-Tukey (eliminate allocations)
+  - Precomputed twiddle factors (eliminate recomputation)
+  - Cache-friendly memory access (loop tiling)
+  - Target: 5-10× speedup → NTT faster than Lagrange for m ≥ 256
+
+### v0.3.0 (SIMD)
+- AVX2 vectorization (4× u64 parallelism)
+- Optimized modular arithmetic (Montgomery reduction)
 
 ---
 

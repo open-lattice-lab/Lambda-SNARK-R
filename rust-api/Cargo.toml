@@ -5,10 +5,13 @@ members = [
     "lambda-snark",
     "lambda-snark-cli",
 ]
+exclude = [
+    "lambda-snark/fuzz",
+]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.0-alpha"
 edition = "2021"
 authors = ["URPKS Contributors"]
 license = "Apache-2.0 OR MIT"
