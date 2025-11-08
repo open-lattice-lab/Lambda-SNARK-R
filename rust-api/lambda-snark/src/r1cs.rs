@@ -768,6 +768,53 @@ fn poly_sub(a: &[u64], b: &[u64], modulus: u64) -> Vec<u64> {
     result
 }
 
+/// Polynomial addition: a(X) + b(X)
+///
+/// # Arguments
+///
+/// * `a` - Coefficients of polynomial a(X)
+/// * `b` - Coefficients of polynomial b(X)
+/// * `modulus` - Field modulus q
+///
+/// # Returns
+///
+/// Coefficients of sum polynomial a(X) + b(X)
+pub fn poly_add(a: &[u64], b: &[u64], modulus: u64) -> Vec<u64> {
+    let max_len = a.len().max(b.len());
+    let mut result = vec![0u64; max_len];
+    
+    for i in 0..max_len {
+        let a_val = if i < a.len() { a[i] } else { 0 };
+        let b_val = if i < b.len() { b[i] } else { 0 };
+        
+        result[i] = ((a_val as u128 + b_val as u128) % modulus as u128) as u64;
+    }
+    
+    // Remove leading zeros
+    while result.len() > 1 && result[result.len() - 1] == 0 {
+        result.pop();
+    }
+    
+    result
+}
+
+/// Scalar multiplication: scalar · poly(X)
+///
+/// # Arguments
+///
+/// * `poly` - Coefficients of polynomial p(X)
+/// * `scalar` - Scalar value r ∈ F_q
+/// * `modulus` - Field modulus q
+///
+/// # Returns
+///
+/// Coefficients of product r · p(X)
+pub fn poly_mul_scalar(poly: &[u64], scalar: u64, modulus: u64) -> Vec<u64> {
+    poly.iter()
+        .map(|&coeff| ((coeff as u128 * scalar as u128) % modulus as u128) as u64)
+        .collect()
+}
+
 /// Compute vanishing polynomial Z_H(X) = ∏_{i=0}^{m-1} (X - i)
 ///
 /// For domain H = {0, 1, 2, ..., m-1}, returns coefficients of
@@ -781,7 +828,7 @@ fn poly_sub(a: &[u64], b: &[u64], modulus: u64) -> Vec<u64> {
 /// # Returns
 ///
 /// Coefficients of Z_H(X), length m+1 (degree m)
-fn vanishing_poly(m: usize, modulus: u64) -> Vec<u64> {
+pub fn vanishing_poly(m: usize, modulus: u64) -> Vec<u64> {
     // Start with Z_H(X) = 1
     let mut poly = vec![1u64];
     
