@@ -540,6 +540,55 @@ fn mod_pow(base: u64, exp: u64, modulus: u64) -> u64 {
     result
 }
 
+/// Constant-time modular exponentiation: base^exp mod modulus
+///
+/// **Security**: Timing-resistant version using `subtle` crate for constant-time
+/// conditional selection. Use this for witness-dependent computations to prevent
+/// timing side-channel attacks.
+///
+/// # Note
+///
+/// Current usage in ΛSNARK-R has PUBLIC exponents (m, challenges), so timing
+/// leaks are not exploitable. This function is provided for defense-in-depth
+/// and future extensions where witness-dependent exponents may be introduced.
+///
+/// # Arguments
+///
+/// * `base` - Base value (0 ≤ base < modulus)
+/// * `exp` - Exponent (public or secret)
+/// * `modulus` - Modulus q
+///
+/// # Returns
+///
+/// base^exp mod modulus, computed in constant time w.r.t. exp bit pattern
+#[allow(dead_code)]
+fn mod_pow_ct(base: u64, exp: u64, modulus: u64) -> u64 {
+    use subtle::{Choice, ConditionallySelectable};
+    
+    if modulus == 1 {
+        return 0;
+    }
+    
+    let mut result = 1u128;
+    let b = (base % modulus) as u128;
+    let modulus_u128 = modulus as u128;
+    
+    // Process all 64 bits in constant time
+    for i in (0..64).rev() {
+        // Square: result = result²  mod modulus
+        result = (result * result) % modulus_u128;
+        
+        // Conditional multiply: if bit i is set, result *= b
+        let bit = Choice::from(((exp >> i) & 1) as u8);
+        let mult = (result * b) % modulus_u128;
+        
+        // Constant-time select: result = bit ? mult : result
+        result = u128::conditional_select(&result, &mult, bit);
+    }
+    
+    result as u64
+}
+
 /// Modular multiplicative inverse using Extended Euclidean Algorithm
 ///
 /// Returns x such that (a * x) ≡ 1 (mod m)

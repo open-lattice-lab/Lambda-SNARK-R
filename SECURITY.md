@@ -1,23 +1,33 @@
 # Security Policy
 
-> **Version**: 0.1.0-dev  
-> **Last Updated**: November 7, 2025  
-> **Status**: M4 Complete — R1CS Prover/Verifier Working (NOT production-ready)
+> **Version**: 0.1.0-alpha  
+> **Last Updated**: November 8, 2025  
+> **Status**: M5 Complete — Zero-Knowledge Extension + NTT Optimization
 
 ---
 
-## ⚠️ Critical Warning
+## ⚠️ Alpha Release Warning
 
-**ΛSNARK-R is NOT production-ready. DO NOT use for:**
-- Privacy-critical applications (proofs are **NOT zero-knowledge**)
-- Security-critical systems (no external audit, known vulnerabilities)
-- Financial applications (timing attacks possible)
-- Any deployment where adversarial input is possible
+**ΛSNARK-R v0.1.0-alpha is for research and evaluation only.**
 
-**Current Version (0.1.0-dev) Blockers**:
-- ❌ **NOT Zero-Knowledge**: Witness elements leak via polynomial evaluations
-- ❌ **NOT Audited**: No professional security review conducted
-- ❌ **Non-Constant-Time**: Modular arithmetic operations leak timing information
+**Suitable For**:
+- ✅ Academic research
+- ✅ Algorithm benchmarking
+- ✅ Proof-of-concept implementations
+- ✅ Non-sensitive testing environments
+
+**NOT Suitable For**:
+- ❌ Production deployments
+- ❌ Privacy-critical applications (without external audit)
+- ❌ Security-critical systems (alpha software)
+- ❌ Financial applications
+
+**Current Security Posture**:
+- ✅ **Zero-Knowledge**: Witness protected via polynomial blinding (VULN-001 mitigated)
+- ✅ **Soundness**: Domain mismatch fixed (VULN-002)
+- ⚠️ **Side-Channels**: Partial mitigation (constant-time primitives available)
+- ⚠️ **Memory Safety**: Zeroization available (user must use `Witness` wrapper)
+- 🔲 **External Audit**: Scheduled for v0.2.0-beta
 - ❌ **FFI Safety**: C++ SEAL code not memory-safe, potential UB/RCE
 - ⚠️ **O(m²) Performance**: Limited to small circuits (m ≤ 1000)
 
