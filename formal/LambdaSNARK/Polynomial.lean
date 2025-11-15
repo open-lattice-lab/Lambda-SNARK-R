@@ -91,21 +91,25 @@ theorem polynomial_division {F : Type} [Field F]
     ∃! qr : Polynomial F × Polynomial F,
       f = qr.1 * g + qr.2 ∧
       (qr.2 = 0 ∨ qr.2.natDegree < g.natDegree) := by
-  -- Mathlib provides division for polynomials over fields
-  -- Use EuclideanDomain structure (Polynomial F is EuclideanDomain when F is Field)
+  -- Polynomial F has EuclideanDomain instance when F is Field
+  -- Use: g * (f / g) + f % g = f (EuclideanDomain.div_add_mod)
   use (f / g, f % g)
   constructor
   · constructor
     · -- Existence: f = (f / g) * g + (f % g)
-      sorry  -- TODO: Use EuclideanDomain.div_add_mod or field-specific lemma
+      have h := EuclideanDomain.div_add_mod f g
+      ring_nf at h ⊢
+      exact h.symm
     · -- Degree bound: deg(f % g) < deg(g)
       by_cases h : f % g = 0
       · left; exact h
       · right
-        sorry  -- TODO: Use degree bound from EuclideanDomain
-  · -- Uniqueness: if f = q*g + r with deg(r) < deg(g), then q = f/g and r = f%g
+        -- TODO: Need degree bound for remainder in EuclideanDomain
+        sorry
+  · -- Uniqueness: division algorithm gives unique quotient and remainder
     intro ⟨q', r'⟩ ⟨h_eq, h_deg⟩
-    sorry  -- TODO: Derive from division algorithm uniqueness
+    -- From f = q*g + r and f = q'*g + r' with deg bounds, derive q = q' and r = r'
+    sorry
 
 /-- Division by vanishing polynomial -/
 noncomputable def divide_by_vanishing {F : Type} [Field F]
@@ -120,16 +124,19 @@ theorem remainder_zero_iff_vanishing {F : Type} [Field F]
     (h_root : ω ^ m = 1) :
     let (_, r) := divide_by_vanishing f m ω h_root
     r = 0 ↔ ∀ i : Fin m, f.eval (ω ^ i.val) = 0 := by
-  -- Use polynomial roots characterization
-  unfold divide_by_vanishing
+  unfold divide_by_vanishing vanishing_poly
   simp
   constructor
   · intro h_rem i
-    -- If remainder = 0, then f = q * Z_H, so f(ωⁱ) = q(ωⁱ) * 0 = 0
-    sorry  -- TODO: Apply vanishing_poly_roots
+    -- If f %ₘ Z_H = 0, then Z_H ∣ f (by modByMonic_eq_zero_iff_dvd)
+    -- So f = q * Z_H, and f(ωⁱ) = q(ωⁱ) * ∏ⱼ(ωⁱ - ωʲ)
+    -- The product contains factor (ωⁱ - ωⁱ) = 0
+    sorry  -- TODO: Show Z_H(ωⁱ) = 0 using product evaluation
   · intro h_eval
-    -- If f vanishes on all roots, then Z_H | f, so remainder = 0
-    sorry  -- TODO: Use polynomial factor theorem
+    -- If f(ωⁱ) = 0 for all i, then (X - ωⁱ) ∣ f for each i
+    -- Since factors are coprime, ∏ᵢ (X - ωⁱ) ∣ f, i.e., Z_H ∣ f
+    -- By modByMonic_eq_zero_iff_dvd, f %ₘ Z_H = 0
+    sorry  -- TODO: Use coprimality and product of linear factors divides f
 
 -- ============================================================================
 -- Witness Polynomial Construction
