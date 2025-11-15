@@ -9,8 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned (M6-M7)
-- **M6**: Complete documentation consolidation (ETA: Nov 2025)
+### Completed (M6) - November 15, 2025
+- ✅ **M6**: Documentation consolidation complete
+  - Formal specification (docs/spec/specification.sdoc, 822 lines, StrictDoc format)
+  - Detailed M7-M10 roadmap with time estimates and artifacts
+  - 5 architecture diagrams (SVG, 111KB)
+  - README/ROADMAP/CHANGELOG/SECURITY synchronized
+
+### Planned (M7)
 - **M7**: Comprehensive test suite (property-based, fuzzing, regression) (ETA: Jan 2026)
 - **M7**: Alpha release (0.1.0-alpha) to crates.io (ETA: Jan 2026)
 

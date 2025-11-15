@@ -2,7 +2,8 @@
 
 > **Version**: 0.1.0-dev  
 > **Last Updated**: November 15, 2025  
-> **Status**: M5 Complete — NTT + Zero-Knowledge Implemented (NOT production-ready)
+> **Status**: M6 Complete — Documentation + Formal Specification (NOT production-ready)  
+> **Formal Specification**: [docs/spec/specification.sdoc](docs/spec/specification.sdoc) (StrictDoc format)
 
 ---
 

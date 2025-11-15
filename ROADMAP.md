@@ -2,7 +2,7 @@
 
 > **Version**: 0.1.0-alpha  
 > **Last Updated**: November 15, 2025  
-> **Overall Progress**: 85% (M1-M5 complete, M6 in-progress)
+> **Overall Progress**: 90% (M1-M6 complete, ready for M7)
 
 ---
 
@@ -15,9 +15,9 @@
 | **M3** | Sparse Matrices: R1CS data structures | ✅ Complete | 4 commits | 28 tests | 12h | ✅ Oct 2025 |
 | **M4** | R1CS Subsystem: Prover/verifier | ✅ Complete | 8 commits | 60 tests | 32h | ✅ Nov 2025 |
 | **M5** | Optimizations: FFT/NTT + Zero-Knowledge | ✅ Complete | 7 commits | 162+ tests | 18h | ✅ Nov 2025 |
-| **M6** | Documentation: Consolidation | 🔄 60% | 3 commits | - | 6h | Nov 2025 |
+| **M6** | Documentation: Consolidation | ✅ Complete | 4 commits | - | 6h | ✅ Nov 2025 |
 | **M7** | Final Testing: Alpha release | 🔜 Planned | - | - | 8h | Jan 2026 |
-| **TOTAL** | Full alpha-quality system | 🔄 85% | 33 commits | 162+ tests | 132h | Q1 2026 |
+| **TOTAL** | Full alpha-quality system | 🔄 90% | 35 commits | 162+ tests | 138h | Q1 2026 |
 
 **Key Metrics** (as of commit 0002772):
 - **Code**: 4,200+ lines (Rust implementation with NTT + ZK)
@@ -371,11 +371,11 @@ Scaling: 1.30× growth (m=10→30), empirical exponent: 0.24
 
 ---
 
-## 🔄 M6: Documentation + Examples Consolidation (IN-PROGRESS)
+## ✅ M6: Documentation + Examples Consolidation (COMPLETE)
 
 **Goal**: Production-quality documentation for alpha release  
-**Status**: 🔄 40% complete (as of commit 212321d)  
-**Time**: 2.4h / 6h estimated
+**Status**: ✅ 100% complete (as of commit 35a08d4)  
+**Time**: 6h actual
 
 ### Deliverables
 
@@ -391,52 +391,71 @@ Scaling: 1.30× growth (m=10→30), empirical exponent: 0.24
 - **Lines**: +190 / -110 (net +80)
 - **Status**: ✅ Complete
 
-#### M6.2: ROADMAP.md (This File) 🔄
-- **Status**: 🔄 In-progress (current document)
+#### M6.2: ROADMAP.md (This File) ✅
+- **Commit**: `35a08d4` (Nov 15, 2025)
+- **Status**: ✅ Complete
 - **Content**:
-  - TL;DR status table
-  - Milestone dependency graph
-  - Full M1-M7 details with commits, tests, time
-  - Known issues per milestone
-- **ETA**: Nov 7, 2025 (today)
+  - TL;DR status table (updated M6 → Complete)
+  - Milestone dependency graph (SVG)
+  - Full M1-M10 details with time estimates, artifacts, risks
+  - Detailed M7-M10 roadmap (testing, soundness proof, ZK proof, completeness)
+  - v1.0.0 production release plan (May 2026)
 
-#### M6.3: CHANGELOG.md 🔜
-- **Status**: 🔜 Planned
+#### M6.3: CHANGELOG.md ✅
+- **Commit**: `0640c6c` (Nov 15, 2025)
+- **Status**: ✅ Complete
 - **Content**:
-  - Version 0.1.0-alpha release notes
-  - Breaking changes, new features, bug fixes
-  - Migration guide (none yet, first release)
+  - M5.1/M5.2 implementation details (NTT + ZK)
+  - Version 0.1.0-dev release notes
+  - Comprehensive change history (M1-M5)
+  - Performance metrics and benchmarks
 - **Format**: [Keep a Changelog](https://keepachangelog.com/) style
-- **ETA**: Nov 8, 2025
 
-#### M6.4: SECURITY.md 🔜
-- **Status**: 🔜 Planned
+#### M6.4: SECURITY.md ✅
+- **Commit**: `0640c6c` (Nov 15, 2025)
+- **Status**: ✅ Complete
 - **Content**:
-  - Threat model (adversarial prover, verifier)
-  - Security assumptions (Module-LWE, Random Oracle Model)
-  - Known vulnerabilities (non-ZK, timing attacks)
+  - Threat model (malicious prover, verifier)
+  - Security assumptions (Module-LWE/SIS, Random Oracle Model)
+  - Known vulnerabilities (VULN-001 mitigated, timing attacks documented)
   - Responsible disclosure policy
-- **ETA**: Nov 8, 2025
+  - Production requirements checklist
 
-#### M6.5: Architecture Diagram 🔜
-- **Status**: 🔜 Planned
-- **Format**: Mermaid + Graphviz SVG export
+#### M6.5: Architecture Diagrams ✅
+- **Commit**: `09fe59b` (Nov 15, 2025)
+- **Status**: ✅ Complete
+- **Format**: Mermaid + SVG export via mermaid.ink API
 - **Content**:
-  - System components (LWE, R1CS, Polynomial, Fiat-Shamir)
-  - Data flow (witness → proof → verification)
-  - Module dependencies (core → sys → API → CLI)
-- **ETA**: Nov 9, 2025
+  - 5 SVG diagrams (111KB total): milestone-dependencies, module-dependencies, system-components, security-boundaries, performance-characteristics
+  - Embedded in docs/architecture.md with collapsible mermaid source
+  - Fixed `<br/>` tag incompatibility with mermaid.ink
+
+#### M6.6: Formal Specification ✅
+- **Commit**: `35a08d4` (Nov 15, 2025)
+- **Status**: ✅ Complete
+- **File**: `docs/spec/specification.sdoc` (822 lines, StrictDoc format)
+- **Content**:
+  - Security requirements (SEC-SOUNDNESS-001, SEC-ZK-001, SEC-COMPLETENESS-001)
+  - Functional requirements (FUNC-R1CS-001, FUNC-POLY-001, FUNC-COMMIT-001)
+  - API contracts (API-BUILDER-001, API-PROVE-001, API-VERIFY-001)
+  - Performance requirements (PERF-PROVE-001, PERF-VERIFY-001)
+  - Testing requirements (TEST-UNIT-001, TEST-INTEGRATION-001, TEST-FUZZING-001)
+  - Formal verification requirements (FORMAL-SOUNDNESS-001, FORMAL-ZK-001, FORMAL-COMPLETENESS-001)
+  - Security audit requirements (AUDIT-CRYPTO-001, AUDIT-CODE-001)
+  - Traceability matrix (requirements → implementation → tests → proofs)
 
 ### Test Coverage
-- **Documentation tests**: 0 (rustdoc examples not executable yet)
+- **Documentation tests**: 0 (rustdoc examples not executable yet, planned for M7)
 - **Manual review**: 100% (all docs reviewed by maintainer)
+- **Specification**: Machine-readable StrictDoc format (822 lines)
 
 ### Dependencies
-- **M4**: Complete implementation to document
+- **M4**: Complete implementation to document ✅
+- **M5**: NTT + ZK implementation details ✅
 
 ### Known Issues
-- 🟡 **Open**: No formal specification document (deferred to post-M7)
-- 🟡 **Open**: API reference not published to docs.rs (needs crate release)
+- ✅ **Resolved**: Formal specification created (docs/spec/specification.sdoc)
+- 🟡 **Deferred**: API reference not published to docs.rs (needs M7 crate release)
 
 ---
 
