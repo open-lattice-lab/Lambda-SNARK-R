@@ -45,7 +45,17 @@ noncomputable def vanishing_poly {F : Type} [Field F] (m : ℕ) (ω : F) : Polyn
 lemma primitive_root_injective {F : Type} [Field F] (m : ℕ) (ω : F)
     (h_omega : ω ^ m = 1) (h_prim : ∀ k : Fin m, k.val ≠ 0 → ω ^ k.val ≠ 1)
     (i j : Fin m) : ω ^ i.val = ω ^ j.val → i = j := by
-  sorry  -- TODO: Standard fact about primitive roots: ω^i = ω^j ⟹ i = j for i,j < m
+  intro h_eq
+  -- ω^m = 1 and m > 0 (from Fin m nonempty) ⟹ ω ≠ 0
+  have h_omega_ne_zero : ω ≠ 0 := by
+    intro h_zero
+    subst h_zero
+    -- 0^m = 1 is false for m > 0
+    sorry  -- TODO: Needs Fin m nonempty ⟹ m > 0 ⟹ 0^m = 0 ≠ 1
+  -- If ω^i = ω^j then ω^(i-j mod m) = 1
+  -- Primitivity: ω^k = 1 only for k = 0
+  -- So i = j mod m, but Fin m has i,j < m, so i = j
+  sorry  -- TODO: Use ZMod m arithmetic + primitivity
 
 /-- Lagrange basis polynomial Lᵢ(X) = ∏_{j≠i} (X - ωʲ) / (ωⁱ - ωʲ) -/
 noncomputable def lagrange_basis {F : Type} [Field F] [DecidableEq (Fin 1)] (m : ℕ) (ω : F) (i : Fin m) : Polynomial F :=
@@ -72,7 +82,7 @@ theorem lagrange_basis_property {F : Type} [Field F] [DecidableEq (Fin 1)] (m : 
       ext k
       by_cases hk : k = i
       · simp only [hk, if_true, Polynomial.coe_evalRingHom, Polynomial.eval_one]
-      · simp only [hk, if_false, Polynomial.coe_evalRingHom, Polynomial.eval_sub, 
+      · simp only [hk, if_false, Polynomial.coe_evalRingHom, Polynomial.eval_sub,
                    Polynomial.eval_X, Polynomial.eval_C]
     -- Denominator is nonzero (from primitivity of ω)
     have h_denom_ne_zero : (∏ k : Fin m, if k = i then (1 : F) else (ω ^ i.val - ω ^ k.val)) ≠ 0 := by
