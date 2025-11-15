@@ -93,13 +93,15 @@ find_package(Eigen3 3.4 QUIET)
 find_package(sodium QUIET)
 
 # --- Library: lambda_snark_core ---
-add_library(lambda_snark_core
+# --- Main library ---
+add_library(lambda_snark_core STATIC
     src/commitment.cpp
     src/ntt.cpp
     src/lincheck.cpp
     src/mulcheck.cpp
     src/r1cs.cpp
     src/ffi.cpp
+    src/lean_ffi.cpp
     src/utils.cpp
 )
 
@@ -188,8 +190,10 @@ endif()
 if(LAMBDA_SNARK_BUILD_BENCHMARKS)
     find_package(benchmark QUIET)
     if(benchmark_FOUND)
-        add_executable(bench_ntt benches/bench_ntt.cpp)
-        target_link_libraries(bench_ntt PRIVATE lambda_snark_core benchmark::benchmark)
+        # TODO: Create benches/bench_ntt.cpp
+        # add_executable(bench_ntt benches/bench_ntt.cpp)
+        # target_link_libraries(bench_ntt PRIVATE lambda_snark_core benchmark::benchmark)
+        message(STATUS "Benchmarks enabled but benches/ directory not yet created")
     else()
         message(STATUS "Google Benchmark not found; skipping benchmarks")
     endif()

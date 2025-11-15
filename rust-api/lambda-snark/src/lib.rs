@@ -68,6 +68,8 @@ pub mod sparse_matrix;
 pub mod r1cs;
 pub mod circuit;
 mod ntt;
+pub mod lean_export;   // M10 prototype: VK → Lean term export
+pub mod lean_params;   // M10 prototype: Lean params → Rust validation
 
 pub use commitment::Commitment;
 pub use context::LweContext;
@@ -77,6 +79,8 @@ pub use opening::{Opening, generate_opening, verify_opening, verify_opening_with
 pub use sparse_matrix::SparseMatrix;
 pub use r1cs::R1CS;
 pub use circuit::CircuitBuilder;
+pub use lean_export::{LeanExportable, VerificationKey};
+pub use lean_params::{SecurityParams, validate_params};
 
 use thiserror::Error as ThisError;
 
@@ -98,6 +102,10 @@ pub enum Error {
     /// Invalid dimensions (e.g., NTT modular inverse failure).
     #[error("Invalid dimensions or parameters")]
     InvalidDimensions,
+    
+    /// Invalid input (e.g., Lean parameter parsing, validation failures).
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
 }
 
 /// Proving key (stub).
