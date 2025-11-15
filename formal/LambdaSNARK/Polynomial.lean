@@ -56,9 +56,30 @@ theorem lagrange_basis_property {F : Type} [Field F] [DecidableEq (Fin 1)] (m : 
   by_cases h : i = j
   · -- Case i = j: Show Lᵢ(ωⁱ) = 1
     subst h
-    -- Numerator evaluates to ∏_{k≠i} (ωⁱ - ωᵏ) = denominator
-    -- So: (1/denom) * denom = 1
-    sorry  -- TODO: Prove product evaluation via Finset.prod_bij
+    simp only [if_true]
+    -- Evaluate numerator: ∏_{k≠i} (X - ωᵏ) at ωⁱ = ∏_{k≠i} (ωⁱ - ωᵏ) = denominator
+    have h_num_eval : (∏ k : Fin m, if k = i then 1 else (Polynomial.X - Polynomial.C (ω ^ k.val))).eval (ω ^ i.val) =
+                       ∏ k : Fin m, if k = i then (1 : F) else (ω ^ i.val - ω ^ k.val) := by
+      rw [← Polynomial.coe_evalRingHom, map_prod]
+      congr 1
+      ext k
+      by_cases hk : k = i
+      · simp only [hk, if_true, Polynomial.coe_evalRingHom, Polynomial.eval_one]
+      · simp only [hk, if_false, Polynomial.coe_evalRingHom, Polynomial.eval_sub, 
+                   Polynomial.eval_X, Polynomial.eval_C]
+    -- Denominator is nonzero (from primitivity of ω)
+    have h_denom_ne_zero : (∏ k : Fin m, if k = i then (1 : F) else (ω ^ i.val - ω ^ k.val)) ≠ 0 := by
+      apply Finset.prod_ne_zero_iff.mpr
+      intro k _
+      by_cases hk : k = i
+      · simp [hk]
+      · simp only [hk, if_false]
+        intro h_eq
+        -- ωⁱ = ωᵏ ⟹ ω^(i-k) = 1 with i≠k ⟹ contradiction with primitivity
+        sorry  -- TODO: Requires ZMod subtraction and primitivity lemma
+    -- Now: (1/denom) * denom = 1
+    rw [h_num_eval]
+    field_simp [h_denom_ne_zero]
   · -- Case i ≠ j: Show Lᵢ(ωʲ) = 0
     -- Numerator contains factor (X - ωʲ), evaluation at ωʲ gives 0
     simp only [if_neg h]
