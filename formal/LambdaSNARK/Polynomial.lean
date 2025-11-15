@@ -64,11 +64,12 @@ theorem lagrange_basis_property {F : Type} [Field F] [DecidableEq (Fin 1)] (m : 
     simp only [if_neg h]
     suffices h_prod_zero : (∏ k : Fin m, if k = i then 1 else (Polynomial.X - Polynomial.C (ω ^ k.val))).eval (ω ^ j.val) = 0 by
       rw [h_prod_zero]; ring
-    -- Show product contains zero factor at k = j
-    have h_factor : ((if j = i then (1 : Polynomial F) else (Polynomial.X - Polynomial.C (ω ^ j.val)))).eval (ω ^ j.val) = 0 := by
-      simp only [if_neg (Ne.symm h), Polynomial.eval_sub, Polynomial.eval_X, Polynomial.eval_C, sub_self]
-    -- Polynomial eval is a ring homomorphism, so eval (∏ pᵢ) = ∏ eval(pᵢ)
-    sorry  -- TODO: Use Polynomial.eval_prod or manual proof via induction
+    -- Product evaluation: eval is RingHom, so commutes with products
+    -- Use fact: (Polynomial.eval x) preserves products (it's a ring homomorphism)
+    conv_lhs => rw [← Polynomial.coe_evalRingHom]; rw [map_prod]
+    -- Now: ∏ eval(pᵢ) contains factor eval((X - ωʲ)) = 0
+    apply Finset.prod_eq_zero (Finset.mem_univ j)
+    simp only [if_neg (Ne.symm h), Polynomial.coe_evalRingHom, Polynomial.eval_sub, Polynomial.eval_X, Polynomial.eval_C, sub_self]
 
 /-- Lagrange interpolation: construct polynomial from evaluations -/
 noncomputable def lagrange_interpolate {F : Type} [Field F] [DecidableEq (Fin 1)] (m : ℕ) (ω : F)
