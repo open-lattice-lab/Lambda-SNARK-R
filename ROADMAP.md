@@ -675,18 +675,20 @@ Scaling: 1.30× growth (m=10→30), empirical exponent: 0.24
 
 ```
 October 2025:   M1 ✅ M2 ✅ M3 ✅
-November 2025:  M4 ✅ M6 🔄 (in-progress)
-December 2025:  M5.1 🔜 M5.2 🔜 M6 ✅
+November 2025:  M4 ✅ M5 ✅ M6 ✅
 January 2026:   M7 🔜 Alpha Release 🎉
-Q2-Q3 2026:     Security audit + production hardening
+Feb-Apr 2026:   M8 🔜 M9 🔜 M10 🔜 (Formal Verification)
+May 2026:       v1.0.0 🎯 Production Release
+Q2-Q3 2026:     Security audit + external review
 ```
 
 **Next Immediate Steps**:
-1. ✅ Complete ROADMAP.md (this file) — **Nov 7, 2025**
-2. 🔜 Create CHANGELOG.md — Nov 8, 2025
-3. 🔜 Create SECURITY.md — Nov 8, 2025
-4. 🔜 Add architecture diagram — Nov 9, 2025
-5. 🔜 Mark M6 complete — Nov 9, 2025
+1. ✅ Complete ROADMAP.md (this file) — **Nov 15, 2025**
+2. ✅ Formal specification (docs/spec/specification.sdoc) — **Nov 15, 2025**
+3. 🔜 M7 Final Testing (performance fix, 200+ tests) — **Jan 2026**
+4. 🔜 M8 Soundness Proof (Lean 4) — **Feb 2026**
+5. 🔜 M9 Zero-Knowledge Proof (Lean 4) — **Mar 2026**
+6. 🔜 M10 Completeness + Integration — **Apr 2026**
 
 ---
 
@@ -725,6 +727,358 @@ Q2-Q3 2026:     Security audit + production hardening
 5. **Performance monitoring**: CI regression tests
 
 **Long-Term** (2026-2027):
+- **v0.2.0**: Batch proving (multiple R1CS in one proof)
+- **v0.3.0**: Recursive SNARKs (proof-of-proof)
+- **v1.0.0**: Production release after audit + 6mo stability
+
+---
+
+## 🔜 M7: Final Testing & Alpha Release (PLANNED)
+
+**Goal**: Production-quality testing and v0.1.0-alpha release  
+**Status**: 🔜 Planned  
+**ETA**: January 2026  
+**Time**: 8 hours
+
+### Deliverables
+
+#### M7.1: Performance Regression Fix
+- **Issue**: 1 test shows ZK overhead 1.53× vs target 1.10×
+- **Investigation**: Profile `prove_r1cs_zk()` for bottlenecks
+- **Fix**: Optimize random sampling (batched RNG), cache Z_H(X) computation
+- **Validation**: All 118 tests passing with overhead ≤1.10×
+- **Time**: 3 hours
+
+#### M7.2: Security Review (Preliminary)
+- **Timing attacks**: Audit modular arithmetic for constant-time operations
+- **Side-channels**: Review LWE commitment for cache-timing leaks
+- **FFI safety**: Validate C++ panic handling, null pointer checks
+- **Tools**: cargo audit, cargo clippy, manual code review
+- **Output**: SECURITY.md updated with preliminary findings
+- **Time**: 2 hours
+
+#### M7.3: Full Test Suite Expansion
+- **Current**: 162 tests (117/118 passing)
+- **Target**: 200+ tests (100% passing)
+- **New tests**:
+  - Fuzz testing: 10K random invalid proofs
+  - Property-based: proptest for polynomial ops
+  - Integration: End-to-end Rust ↔ C++ consistency
+- **Coverage**: 99% line coverage goal
+- **Time**: 2 hours
+
+#### M7.4: Alpha Release Preparation
+- **CHANGELOG.md**: Complete v0.1.0-alpha release notes
+- **Cargo.toml**: Version bump, metadata update
+- **crates.io**: Publish dry-run, then live release
+- **GitHub**: Tag v0.1.0-alpha, create release with artifacts
+- **Documentation**: Final README/docs review
+- **Time**: 1 hour
+
+### Test Coverage
+- **Unit**: 120+ (target)
+- **Integration**: 60+ (target)
+- **Fuzz**: 10K+ iterations
+- **Property**: 20+ properties
+- **Total**: 200+ tests
+
+### Dependencies
+- **M5**: NTT + ZK implementation complete
+- **M6**: Documentation consolidated
+
+### Known Risks
+- **Performance fix complexity**: May require deeper NTT optimization
+- **Security findings**: Preliminary review may uncover critical issues
+- **Community feedback**: Alpha release exposes system to external scrutiny
+
+---
+
+## 🔜 M8: Soundness Proof (PLANNED)
+
+**Goal**: Machine-checked proof of knowledge soundness in Lean 4  
+**Status**: 🔜 Planned  
+**ETA**: February 2026 (4-6 weeks)  
+**Time**: 160-240 hours (4-6 weeks × 40h/week)
+
+### Deliverables
+
+#### M8.1: Knowledge Extractor Construction
+- **File**: `formal/LambdaSNARK/Soundness.lean` (+500 lines)
+- **Components**:
+  - Extractor definition: Rewinding adversary at Fiat-Shamir challenges
+  - Success probability analysis: Pr[extract] ≥ ε² - negl(λ)
+  - Witness recovery: Solve Q(α₁) - Q(α₂) for polynomial coefficients
+- **Time**: 2 weeks
+
+#### M8.2: Rewinding Lemma Proof
+- **File**: `formal/LambdaSNARK/RewindingLemma.lean` (+150 lines)
+- **Statement**:
+  ```lean
+  lemma rewind_success (A : Adversary) (ε : ℝ) :
+    Pr[Verify vk x (A x)] ≥ ε →
+    Pr[∃ α₁ α₂, α₁ ≠ α₂ ∧ 
+        Verify vk x (A.run_with_challenge α₁) ∧
+        Verify vk x (A.run_with_challenge α₂)] ≥ ε² - negl(λ)
+  ```
+- **Technique**: Forking lemma from Fiat-Shamir literature
+- **Time**: 1.5 weeks
+
+#### M8.3: Module-SIS Reduction
+- **File**: `formal/LambdaSNARK/SISReduction.lean` (+200 lines)
+- **Statement**:
+  ```lean
+  theorem sis_break_from_extractor_fail :
+    (∀ w, ¬satisfies vk.C x w ∨ E A x ≠ some w) →
+    Pr[Verify vk x (A x)] ≥ ε →
+    ∃ (s : SIS_Solution), Module_SIS_Verify pp.vc_pp s = true
+  ```
+- **Proof sketch**: Extractor failure + verification success → collision in LWE commitment → SIS solution
+- **Time**: 1.5 weeks
+
+#### M8.4: Integration Test (Lean ↔ Rust)
+- **File**: `formal/LambdaSNARK/Integration.lean` (+100 lines)
+- **Tests**:
+  - Export Rust VK to Lean term
+  - Verify proof in Lean using extracted VK
+  - Validate parameter consistency (n, q, σ, λ)
+- **Implementation**: `rust-api/lambda-snark/src/lean_ffi.rs`
+- **Time**: 1 week
+
+### Artifacts
+```
+formal/LambdaSNARK/
+├── Soundness.lean          # Main theorem + proof (500 lines)
+├── RewindingLemma.lean     # Forking lemma (150 lines)
+├── SISReduction.lean       # Cryptographic reduction (200 lines)
+└── Integration.lean        # FFI tests (100 lines)
+
+artifacts/
+├── m8-proof-sketch.pdf     # Human-readable outline
+├── m8-lean-build.log       # lake build success log
+└── m8-integration-tests.txt # Rust ↔ Lean validation
+```
+
+### Dependencies
+- **M7**: Alpha release (community feedback)
+- **External**: Mathlib4 (Lean standard library)
+- **Consultation**: Cryptographer review of proof strategy
+
+### Known Risks
+- **Proof complexity**: Rewinding lemma may require stronger ROM assumptions
+- **Mathlib gaps**: Probability theory in Lean 4 still developing
+- **Time estimate**: 4-6 weeks assumes experienced Lean user (may be 8w for first-time)
+
+---
+
+## 🔜 M9: Zero-Knowledge Proof (PLANNED)
+
+**Goal**: Machine-checked proof of zero-knowledge property in Lean 4  
+**Status**: 🔜 Planned  
+**ETA**: March 2026 (3-4 weeks)  
+**Time**: 120-160 hours
+
+### Deliverables
+
+#### M9.1: Simulator Construction
+- **File**: `formal/LambdaSNARK/ZeroKnowledge.lean` (+400 lines)
+- **Components**:
+  - Simulator definition: Generate proofs without witness
+  - ROM programming: Set challenges to "good" values
+  - LWE hiding: Prove commitment indistinguishability
+- **Time**: 1.5 weeks
+
+#### M9.2: Indistinguishability Proof (Hybrid Argument)
+- **File**: `formal/LambdaSNARK/HybridArgument.lean` (+250 lines)
+- **Game sequence**:
+  - H₀: Real prover (honest witness)
+  - H₁: Replace Q(X) with random Q'(X) (LWE hiding)
+  - H₂: Replace A_z(X) with A'_z(X) (polynomial blinding)
+  - H₃: Replace B_z(X), C_z(X) similarly
+  - H₄: Program ROM for challenges
+  - H₅: Full simulator (no witness)
+- **Advantage bound**: |Pr[D wins in H₀] - Pr[D wins in H₅]| ≤ 5·negl(λ)
+- **Time**: 1.5 weeks
+
+#### M9.3: Module-LWE Reduction
+- **File**: `formal/LambdaSNARK/LWEReduction.lean` (+150 lines)
+- **Statement**:
+  ```lean
+  lemma lwe_break_from_distinguisher :
+    (∀ (Sim : Simulator), ∃ (D : Distinguisher),
+      |Pr[D (Real vk)] - Pr[D (Sim vk)]| > negl(λ)) →
+    ∃ (B : LWE_Breaker), Module_LWE_Advantage pp.vc_pp B > negl(λ)
+  ```
+- **Time**: 1 week
+
+### Artifacts
+```
+formal/LambdaSNARK/
+├── ZeroKnowledge.lean      # Main theorem (400 lines)
+├── Simulator.lean          # Simulator construction (200 lines)
+├── HybridArgument.lean     # Game-based proof (250 lines)
+└── LWEReduction.lean       # Distinguisher → LWE (150 lines)
+
+artifacts/
+├── m9-hybrid-games.pdf     # Visual H₀→...→H₅ diagram
+├── m9-simulator-test.txt   # Simulator validation
+└── m9-lean-build.log
+```
+
+### Dependencies
+- **M8**: Rewinding techniques (though proofs independent)
+- **M5.2**: Polynomial blinding implementation (validates formal model)
+
+### Known Risks
+- **Simulator correctness**: Must audit M5.2 implementation before formalizing
+- **LWE parameters**: May need σ increase if tighter bounds required
+- **ROM programming**: Formalizing random oracle reprogramming in Lean non-trivial
+
+---
+
+## 🔜 M10: Completeness & Integration (PLANNED)
+
+**Goal**: Completeness proof + bidirectional C++/Rust ↔ Lean verification  
+**Status**: 🔜 Planned  
+**ETA**: April 2026 (2 weeks)  
+**Time**: 80 hours
+
+### Deliverables
+
+#### M10.1: Completeness Proof
+- **File**: `formal/LambdaSNARK/Completeness.lean` (+200 lines)
+- **Statement**:
+  ```lean
+  theorem completeness
+    (pp : PP R) (vk : VK R) (x : Inputs) (w : Witness)
+    (h_sat : satisfies vk.C x w) :
+    Pr[Verify vk x (Prove pp vk x w)] = 1
+  ```
+- **Proof components**:
+  1. Quotient polynomial correctness: (A_z·B_z - C_z) % Z_H = 0
+  2. Verification equations hold: Q(α)·Z_H(α) = A_z(α)·B_z(α) - C_z(α)
+  3. LWE openings valid: Honest prover generates correct openings
+- **Time**: 1 week
+
+#### M10.2: C++ FFI Extraction
+- **File**: `cpp-core/src/lean_ffi.cpp` (+150 lines)
+- **Functionality**:
+  - Export R1CS verification key to Lean term format
+  - Example: `⟨4096, 12289, SparseMatrix.mk [...]⟩`
+- **Tests**: `cpp-core/tests/test_lean_ffi.cpp`
+- **Time**: 0.5 weeks
+
+#### M10.3: Rust Parameter Validation
+- **File**: `rust-api/lambda-snark/src/lean_params.rs` (+100 lines)
+- **Functionality**:
+  - Import security parameters from Lean definitions
+  - Validate: n, q (primality), σ, λ
+  - Prevent VULN-001-style bugs (non-prime modulus)
+- **Tests**: `rust-api/lambda-snark/tests/test_lean_params.rs`
+- **Time**: 0.5 weeks
+
+### Artifacts
+```
+formal/LambdaSNARK/
+└── Completeness.lean       # Honest prover theorem (200 lines)
+
+cpp-core/src/
+└── lean_ffi.cpp            # VK export (150 lines)
+
+rust-api/lambda-snark/src/
+└── lean_params.rs          # Params import (100 lines)
+
+artifacts/
+├── m10-ffi-examples.cpp    # Usage examples
+├── m10-params-validation.rs # Validation tests
+└── m10-e2e-test.txt        # Full C++ → Lean → Rust pipeline
+```
+
+### Dependencies
+- **M8, M9**: Soundness + ZK proofs (completeness simpler, can overlap)
+- **M7**: Alpha release (stable API for FFI)
+
+### Known Risks
+- **FFI complexity**: C++ ↔ Lean may require JSON intermediate (acceptable fallback)
+- **SEAL limitations**: Microsoft SEAL may not expose all needed APIs
+
+---
+
+## 🎯 v1.0.0: Production Release (TARGET)
+
+**Goal**: Fully verified, audited, production-ready system  
+**Status**: 🎯 Target  
+**ETA**: May 2026  
+**Time**: +2 weeks buffer after M10
+
+### Deliverables
+
+#### Complete Formal Verification
+- ✅ Soundness proof (M8)
+- ✅ Zero-knowledge proof (M9)
+- ✅ Completeness proof (M10)
+- ✅ Bidirectional integration (M10)
+- ✅ External cryptographer review
+
+#### Security Audit
+- **Scope**: Cryptographic parameters, side-channel resistance, code security
+- **Vendor**: External security firm (TBD)
+- **Duration**: 4-6 weeks
+- **Cost estimate**: $15K-$30K
+- **Deliverable**: Public audit report
+
+#### Performance Validation
+- **Benchmarks**: m = 10² → 10⁶ constraints
+- **Target**: m=10⁶ in <2 minutes with NTT
+- **Proof size**: 224 bytes (validated across all m)
+- **Verifier**: <2ms constant-time
+
+#### Documentation Complete
+- ✅ Formal specification (docs/spec/specification.sdoc)
+- ✅ API documentation (rustdoc 100%)
+- ✅ Architecture documentation (docs/architecture.md)
+- ✅ Tutorials (docs/tutorials/*.md)
+- ✅ Blog post (>500 views target)
+
+#### Quality Metrics
+- ✅ 250+ tests (unit + integration + property + fuzz)
+- ✅ 99% line coverage
+- ✅ 0 critical security findings
+- ✅ 0 known soundness bugs
+
+#### Community Goals
+- 🎯 50+ GitHub stars
+- 🎯 3+ contributors
+- 🎯 Published to crates.io
+- 🎯 Adoption in 1+ real projects
+
+### Artifacts
+```
+artifacts/
+├── v1.0.0-formal-verification-certificate.pdf
+├── v1.0.0-security-audit-report.pdf
+├── v1.0.0-performance-benchmarks.csv
+├── v1.0.0-release-notes.md
+└── v1.0.0-specification.pdf
+
+docs/
+├── specification.sdoc (StrictDoc format)
+├── api-reference.md (auto-generated)
+└── tutorials/
+    ├── getting-started.md
+    ├── advanced-circuits.md
+    └── formal-verification-guide.md
+```
+
+### Success Criteria
+1. All formal proofs verified: `lake build && lake env lean --make LambdaSNARK`
+2. Security audit: 0 critical, 0 high findings
+3. Performance: m=2^20 in <2 min (measured)
+4. Tests: 250+ passing, 99% coverage
+5. Community: 50+ stars, 3+ contributors, blog post >500 views
+
+---
+
+**Long-Term** (Post-v1.0.0, 2026-2027):
 - **v0.2.0**: Batch proving (multiple R1CS in one proof)
 - **v0.3.0**: Recursive SNARKs (proof-of-proof)
 - **v1.0.0**: Production release after audit + 6mo stability

@@ -225,10 +225,13 @@ See [rust-api/lambda-snark-cli/EXAMPLES.md](rust-api/lambda-snark-cli/EXAMPLES.m
 
 ## 📚 Documentation
 
+- **[Formal Specification](docs/spec/specification.sdoc)**: StrictDoc requirements (security, API, performance)
 - **[CLI Examples](rust-api/lambda-snark-cli/EXAMPLES.md)**: Complete usage guide with examples
 - **[API Reference](https://docs.rs/lambda-snark)**: Rust API docs (when published)
-- **[Roadmap](ROADMAP.md)**: Development milestones and progress
+- **[Architecture](docs/architecture.md)**: System design and component interaction
+- **[Roadmap](ROADMAP.md)**: Development milestones M1-M10 + v1.0.0 plan
 - **[Changelog](CHANGELOG.md)**: Version history and updates
+- **[Security](SECURITY.md)**: Threat model, known issues, audit status
 
 ### Project Status (November 2025)
 

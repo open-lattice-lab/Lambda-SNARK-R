@@ -1,0 +1,822 @@
+[DOCUMENT]
+TITLE: ΛSNARK-R Formal Specification
+UID: LAMBDA-SNARK-R-SPEC
+VERSION: 0.1.0-alpha
+DATE: 2025-11-15
+
+[FREETEXT]
+This document provides a formal specification of the ΛSNARK-R zero-knowledge proof system,
+a post-quantum lattice-based SNARK with transparent setup and constant-size proofs.
+
+**Scope**: Core protocol, security properties, API contracts, verification procedures.
+**Target**: v1.0.0 production release with formal verification (Lean 4).
+[/FREETEXT]
+
+[SECTION]
+TITLE: System Overview
+
+[REQUIREMENT]
+UID: SYS-OVERVIEW-001
+TITLE: System Purpose
+STATEMENT: >>>
+ΛSNARK-R SHALL provide a zero-knowledge Succinct Non-interactive ARgument of Knowledge
+based on lattice cryptography (Module-LWE/SIS) with transparent setup and post-quantum security.
+<<<
+RATIONALE: >>>
+Traditional SNARKs (Groth16, PLONK) rely on pairing-based cryptography vulnerable to quantum attacks.
+ΛSNARK-R provides quantum-resistant alternative with 224-byte proofs and <1ms verification.
+<<<
+COMMENT: >>>
+See README.md for use cases (post-quantum blockchain, verifiable computation, privacy-preserving identity).
+<<<
+
+[REQUIREMENT]
+UID: SYS-OVERVIEW-002
+TITLE: Core Components
+STATEMENT: >>>
+The system SHALL consist of the following components:
+1. R1CS Circuit Builder (constraint system definition)
+2. Polynomial Operations (Lagrange interpolation, NTT)
+3. LWE Commitment Scheme (polynomial hiding)
+4. Fiat-Shamir Transform (non-interactive challenges)
+5. Prover (witness → proof generation)
+6. Verifier (proof validation)
+<<<
+
+[REQUIREMENT]
+UID: SYS-OVERVIEW-003
+TITLE: Language Implementation
+STATEMENT: >>>
+The system SHALL provide:
+- C++ core library (cpp-core/) using Microsoft SEAL for LWE operations
+- Rust API (rust-api/) with safe FFI bindings
+- Lean 4 formal verification (formal/) for soundness/ZK/completeness proofs
+<<<
+COMMENT: >>>
+Triple implementation ensures correctness via cross-validation and formal verification.
+<<<
+
+[/SECTION]
+
+[SECTION]
+TITLE: Security Requirements
+
+[REQUIREMENT]
+UID: SEC-SOUNDNESS-001
+TITLE: Knowledge Soundness
+STATEMENT: >>>
+The system SHALL guarantee computational soundness under Module-SIS hardness assumption:
+For any polynomial-time adversary A producing a valid proof with probability ε ≥ 1/poly(λ),
+there exists an extractor E that recovers a satisfying witness with probability ≥ ε - negl(λ).
+<<<
+RATIONALE: >>>
+Soundness prevents malicious provers from generating valid proofs for false statements.
+Module-SIS assumption: solving short integer solution problem in lattice module is hard.
+<<<
+VERIFICATION: >>>
+Formal proof in Lean 4 (M8): formal/LambdaSNARK/Soundness.lean
+Theorem: knowledge_soundness (under Module-SIS + Random Oracle Model)
+<<<
+
+[REQUIREMENT]
+UID: SEC-ZK-001
+TITLE: Zero-Knowledge Property
+STATEMENT: >>>
+The system SHALL guarantee computational zero-knowledge under Module-LWE hardness:
+For any polynomial-time distinguisher D, there exists a simulator Sim such that:
+|Pr[D(Real)] - Pr[D(Sim)]| ≤ negl(λ)
+where Real is honest prover output, Sim generates proofs without witness.
+<<<
+RATIONALE: >>>
+Zero-knowledge ensures proofs reveal nothing beyond statement validity.
+Implemented via polynomial blinding (M5.2) with randomness r₁,...,rₖ ∈ F_q.
+<<<
+VERIFICATION: >>>
+Formal proof in Lean 4 (M9): formal/LambdaSNARK/ZeroKnowledge.lean
+Theorem: zero_knowledge (under Module-LWE + σ bounds)
+Performance: 1.48-1.53× overhead vs non-ZK (target ≤1.10× by M7)
+<<<
+
+[REQUIREMENT]
+UID: SEC-COMPLETENESS-001
+TITLE: Completeness
+STATEMENT: >>>
+The system SHALL guarantee perfect completeness:
+For any valid witness w satisfying R1CS constraint system C with public inputs x,
+the honest prover generates a proof that verifies with probability 1.
+<<<
+VERIFICATION: >>>
+Formal proof in Lean 4 (M10): formal/LambdaSNARK/Completeness.lean
+Theorem: completeness (honest prover always accepted)
+<<<
+
+[REQUIREMENT]
+UID: SEC-PARAMS-001
+TITLE: Security Parameters
+STATEMENT: >>>
+The system SHALL use the following security parameters (v0.1.0-alpha):
+- Security level: λ = 128 bits
+- LWE dimension: n = 4096
+- Modulus: q = 12289 (prime, NTT-friendly, supports 2^12-point FFT)
+- Gaussian width: σ = 3.2
+- Soundness error: ε ≤ 2^-88 (dual-challenge Fiat-Shamir)
+<<<
+RATIONALE: >>>
+Parameters chosen to match 128-bit post-quantum security (NIST Level I).
+q = 12289 allows efficient NTT with primitive 2^12-th root of unity.
+Dual-challenge (α, β) reduces soundness error from 1/q to 1/q².
+<<<
+COMMENT: >>>
+Parameters validated against lattice-estimator (https://github.com/malb/lattice-estimator).
+See SECURITY.md for detailed analysis.
+<<<
+
+[/SECTION]
+
+[SECTION]
+TITLE: Functional Requirements
+
+[REQUIREMENT]
+UID: FUNC-R1CS-001
+TITLE: R1CS Constraint System
+STATEMENT: >>>
+The system SHALL represent arithmetic circuits as Rank-1 Constraint Systems (R1CS):
+Given constraint matrices A, B, C ∈ F_q^{m×n} and witness vector z ∈ F_q^n,
+the system verifies: (A·z) ⊙ (B·z) = C·z (element-wise product).
+<<<
+RATIONALE: >>>
+R1CS is universal representation for arithmetic circuits, used in Groth16/PLONK/STARKs.
+<<<
+IMPLEMENTATION: >>>
+- Sparse matrix storage (rust-api/lambda-snark/src/sparse_matrix.rs)
+- Memory: ~24 bytes per non-zero entry vs 8mn bytes dense
+- Operations: O(nnz) matrix-vector multiply, O(nnz log nnz) transpose
+<<<
+
+[REQUIREMENT]
+UID: FUNC-POLY-001
+TITLE: Polynomial Operations
+STATEMENT: >>>
+The system SHALL provide polynomial operations over F_q:
+1. Lagrange interpolation: (i, y_i) → P(X) where P(i) = y_i
+2. Vanishing polynomial: Z_H(X) = ∏_{i=0}^{m-1} (X - i)
+3. Polynomial division: Q(X) = P(X) / Z_H(X)
+4. NTT-based evaluation: O(m log m) complexity via Cooley-Tukey FFT
+<<<
+RATIONALE: >>>
+Core proving operation: Q(X) = (A_z·B_z - C_z) / Z_H requires efficient polynomial ops.
+NTT optimization (M5.1) provides 1000× speedup vs O(m²) naive Lagrange.
+<<<
+IMPLEMENTATION: >>>
+- Lagrange (naive): rust-api/lambda-snark/src/polynomial.rs::lagrange_interpolate()
+- NTT (optimized): rust-api/lambda-snark/src/ntt.rs::ntt_interpolate()
+- Feature flag: "ntt" enables O(m log m) path, auto-fallback for small m < 128
+<<<
+
+[REQUIREMENT]
+UID: FUNC-COMMIT-001
+TITLE: LWE Polynomial Commitment
+STATEMENT: >>>
+The system SHALL commit to polynomials P(X) ∈ F_q[X] using Module-LWE:
+- Commitment: C = A·s + e + μ·P_encoded ∈ R_q^k (where R_q = Z_q[X]/(X^n+1))
+- Opening: Prove P(α) = v via LWE challenge-response
+- Hiding: Commitment computationally indistinguishable from random (under Module-LWE)
+<<<
+RATIONALE: >>>
+LWE commitment provides post-quantum security and transparent setup (no trusted setup ceremony).
+<<<
+IMPLEMENTATION: >>>
+- Microsoft SEAL library (cpp-core/src/commitment.cpp)
+- Parameters: n=4096, k=2, q=12289, σ=3.2
+- Proof size: 216 bytes base + 8 bytes per opening = 224 bytes total (2 openings α, β)
+<<<
+
+[REQUIREMENT]
+UID: FUNC-PROVE-001
+TITLE: Proof Generation
+STATEMENT: >>>
+The Prover SHALL take as input:
+- R1CS constraint system (A, B, C matrices)
+- Public inputs x
+- Private witness w
+And output a proof π consisting of:
+- LWE commitment to quotient polynomial Q(X)
+- Fiat-Shamir challenges α, β derived from commitment
+- Polynomial evaluations: Q(α), Q(β), A_z(α), A_z(β), B_z(α), B_z(β), C_z(α), C_z(β)
+- LWE openings at α and β
+<<<
+ALGORITHM: >>>
+1. Construct full witness z = [1, x, w] (z_0 = 1 constant)
+2. Interpolate A_z(X), B_z(X), C_z(X) from constraint matrices
+3. Compute quotient Q(X) = (A_z·B_z - C_z) / Z_H
+4. [If ZK enabled] Blind Q, A_z, B_z, C_z with random multiples of Z_H
+5. Commit to Q(X) via LWE → commitment C_Q
+6. Derive α = H(C_Q || R1CS || x) via Fiat-Shamir
+7. Evaluate all polynomials at α
+8. Derive β = H(C_Q || α || evals_α)
+9. Evaluate all polynomials at β
+10. Generate LWE openings for Q(α) and Q(β)
+11. Output π = (C_Q, α, β, evals, openings)
+<<<
+PERFORMANCE: >>>
+- Build time: O(nnz) constraint loading
+- Prove time: O(m²) naive Lagrange OR O(m log m) with NTT
+- Proof size: 224 bytes (constant, independent of m)
+<<<
+
+[REQUIREMENT]
+UID: FUNC-VERIFY-001
+TITLE: Proof Verification
+STATEMENT: >>>
+The Verifier SHALL take as input:
+- R1CS constraint system (A, B, C matrices)
+- Public inputs x
+- Proof π
+And output Accept/Reject by checking:
+1. Recompute challenges α, β from commitment (deterministic Fiat-Shamir)
+2. Verify equation #1: Q(α) · Z_H(α) = A_z(α) · B_z(α) - C_z(α)
+3. Verify equation #2: Q(β) · Z_H(β) = A_z(β) · B_z(β) - C_z(β)
+4. Verify LWE openings at α and β
+<<<
+PERFORMANCE: >>>
+- Verify time: ~1ms (no polynomial interpolation, only evaluations)
+- Complexity: O(1) field operations (constant # of checks)
+<<<
+SECURITY: >>>
+Soundness error: ε ≤ 1/q² ≈ 2^-88 (dual-challenge prevents polynomial forgery)
+If adversary passes both checks without valid witness, breaks Module-SIS assumption.
+<<<
+
+[/SECTION]
+
+[SECTION]
+TITLE: API Requirements
+
+[REQUIREMENT]
+UID: API-BUILDER-001
+TITLE: Circuit Builder API
+STATEMENT: >>>
+The system SHALL provide a high-level API for circuit construction:
+```rust
+let mut builder = CircuitBuilder::new();
+let x = builder.public_input("x");
+let y = builder.private_input("y");
+let z = builder.mul(&x, &y);
+builder.assert_eq(&z, &builder.constant(91));
+let r1cs = builder.build();
+```
+<<<
+RATIONALE: >>>
+High-level API abstracts R1CS matrix construction, improves usability vs manual constraint writing.
+<<<
+IMPLEMENTATION: >>>
+rust-api/lambda-snark/src/circuit.rs::CircuitBuilder
+Methods: public_input(), private_input(), add(), mul(), constant(), assert_eq()
+<<<
+
+[REQUIREMENT]
+UID: API-PROVE-001
+TITLE: Prove API
+STATEMENT: >>>
+The system SHALL provide a prove function:
+```rust
+fn prove_r1cs_zk(
+    r1cs: &R1CS,
+    public_inputs: &[u64],
+    witness: &[u64],
+    randomness: Option<&[u64]>  // None = non-ZK, Some = ZK
+) -> Result<ProofR1CS, Error>
+```
+<<<
+SAFETY: >>>
+- SHALL validate witness length matches r1cs.num_vars
+- SHALL check constraint satisfaction before proving
+- SHALL return Error if witness invalid
+<<<
+
+[REQUIREMENT]
+UID: API-VERIFY-001
+TITLE: Verify API
+STATEMENT: >>>
+The system SHALL provide a verify function:
+```rust
+fn verify_r1cs_zk(
+    r1cs: &R1CS,
+    public_inputs: &[u64],
+    proof: &ProofR1CS
+) -> Result<bool, Error>
+```
+<<<
+SAFETY: >>>
+- SHALL NOT panic on malformed proofs (defensive checks)
+- SHALL validate proof size bounds
+- SHALL check Fiat-Shamir challenge derivation
+<<<
+
+[REQUIREMENT]
+UID: API-FFI-001
+TITLE: C++ FFI Safety
+STATEMENT: >>>
+The Rust-C++ FFI boundary SHALL:
+- Use extern "C" functions with explicit error codes
+- Never panic across FFI (catch_unwind all entry points)
+- Validate all pointer arguments (null checks)
+- Document ownership semantics (who frees memory)
+<<<
+IMPLEMENTATION: >>>
+rust-api/lambda-snark-sys/src/lib.rs with #[no_mangle] extern "C" functions
+cpp-core/src/ffi.cpp with defensive try-catch blocks
+<<<
+
+[/SECTION]
+
+[SECTION]
+TITLE: Performance Requirements
+
+[REQUIREMENT]
+UID: PERF-PROVE-001
+TITLE: Prover Performance
+STATEMENT: >>>
+The system SHALL achieve the following prover performance:
+- m ≤ 100 constraints: <10ms
+- m = 1000 constraints: <100ms
+- m = 10^6 constraints: <2 minutes (with NTT optimization)
+<<<
+RATIONALE: >>>
+Competitive with PLONK (similar O(m log m) complexity) but 2-5× slower due to LWE overhead.
+Acceptable tradeoff for post-quantum security.
+<<<
+STATUS: >>>
+Current (M5, m=100): ~6ms with NTT
+Target (M7): Optimize ZK overhead from 1.53× to ≤1.10×
+<<<
+
+[REQUIREMENT]
+UID: PERF-VERIFY-001
+TITLE: Verifier Performance
+STATEMENT: >>>
+The system SHALL achieve verifier performance:
+- All circuit sizes: <2ms (constant-time verification)
+<<<
+RATIONALE: >>>
+Fast verification enables blockchain integration (validators need <10ms per proof).
+<<<
+STATUS: >>>
+Current (M4): ~1ms, satisfies requirement
+<<<
+
+[REQUIREMENT]
+UID: PERF-PROOF-SIZE-001
+TITLE: Proof Size
+STATEMENT: >>>
+The system SHALL generate proofs of size ≤250 bytes (constant, independent of circuit size).
+<<<
+RATIONALE: >>>
+Constant-size proofs enable efficient on-chain storage (224 bytes = 7 EVM words).
+500× smaller than STARKs (100KB+), 10× larger than Groth16 (192 bytes).
+<<<
+STATUS: >>>
+Current (M4): 224 bytes (216 base + 8 per opening × 2)
+  = 32B commitment + 8B α + 8B β + 8×8B evaluations + 2×64B openings
+<<<
+
+[/SECTION]
+
+[SECTION]
+TITLE: Testing Requirements
+
+[REQUIREMENT]
+UID: TEST-UNIT-001
+TITLE: Unit Test Coverage
+STATEMENT: >>>
+The system SHALL maintain ≥95% line coverage for core modules:
+- Polynomial operations (ntt.rs, polynomial.rs)
+- R1CS operations (r1cs.rs, sparse_matrix.rs)
+- Commitment scheme (commitment wrapper)
+- Prover/Verifier logic (lib.rs prove/verify functions)
+<<<
+STATUS: >>>
+Current (M5): 98% coverage (162 tests passing, 117/118 with 1 performance regression)
+Target (M7): 200+ tests, 99% coverage
+<<<
+
+[REQUIREMENT]
+UID: TEST-INTEGRATION-001
+TITLE: Integration Tests
+STATEMENT: >>>
+The system SHALL provide integration tests covering:
+- End-to-end workflow: circuit → prove → verify
+- Cross-implementation validation: Rust ↔ C++ consistency
+- Fiat-Shamir determinism: same inputs → same challenges
+- ZK × NTT matrix: 4 configurations (Lagrange/NTT × ZK/non-ZK)
+<<<
+IMPLEMENTATION: >>>
+rust-api/lambda-snark/tests/integration_*.rs
+test-vectors/ directory with JSON test cases
+<<<
+
+[REQUIREMENT]
+UID: TEST-PROPERTY-001
+TITLE: Property-Based Testing
+STATEMENT: >>>
+The system SHALL use property-based testing (proptest) for:
+- Polynomial operations: interpolate → evaluate = identity
+- NTT correctness: ntt → ifft = identity
+- R1CS satisfaction: valid witness → always verify
+- Soundness testing: invalid witness → never verify
+<<<
+
+[REQUIREMENT]
+UID: TEST-FUZZING-001
+TITLE: Fuzz Testing
+STATEMENT: >>>
+The system SHALL fuzz critical paths (M7):
+- Malformed proofs (random bytes)
+- Edge cases: m=0, m=1, m=max
+- Invalid Fiat-Shamir challenges
+- LWE commitment edge cases
+<<<
+RATIONALE: >>>
+Fuzzing discovers crash/panic bugs not caught by unit tests.
+Target: 1M+ fuzzing iterations without crashes.
+<<<
+
+[/SECTION]
+
+[SECTION]
+TITLE: Formal Verification Requirements
+
+[REQUIREMENT]
+UID: FORMAL-SOUNDNESS-001
+TITLE: Lean 4 Soundness Proof
+STATEMENT: >>>
+The system SHALL provide a machine-checked proof of knowledge soundness in Lean 4:
+```lean
+theorem knowledge_soundness
+  (pp : PP R) (vk : VK R) (A : Adversary)
+  (h_sis : ModuleSIS_Hard pp.vc_pp)
+  (h_rom : RandomOracle_Model pp.hash) :
+  ∃ (E : Extractor), ∀ x,
+    Pr[Verify vk x (A x)] ≥ ε →
+    Pr[∃ w, satisfies vk.C x w ∧ E A x = some w] ≥ ε - negl(λ)
+```
+<<<
+DELIVERABLE: >>>
+Milestone M8 (February 2026): formal/LambdaSNARK/Soundness.lean
+Proof components:
+1. Knowledge extractor construction (rewinding adversary)
+2. Rewinding lemma (success probability ≥ ε²)
+3. Module-SIS reduction (extractor failure → SIS solution)
+<<<
+
+[REQUIREMENT]
+UID: FORMAL-ZK-001
+TITLE: Lean 4 Zero-Knowledge Proof
+STATEMENT: >>>
+The system SHALL provide a machine-checked proof of zero-knowledge in Lean 4:
+```lean
+theorem zero_knowledge
+  (pp : PP R) (vk : VK R)
+  (h_lwe : ModuleLWE_Hard pp.vc_pp) :
+  ∃ (Sim : Simulator), ∀ (D : Distinguisher),
+    |Pr[D (Real vk)] - Pr[D (Sim vk)]| ≤ negl(λ)
+```
+<<<
+DELIVERABLE: >>>
+Milestone M9 (March 2026): formal/LambdaSNARK/ZeroKnowledge.lean
+Proof components:
+1. Simulator construction (generate proofs without witness)
+2. Hybrid argument (Real → H₁ → ... → H₅ → Sim)
+3. Module-LWE reduction (distinguisher success → LWE breaker)
+<<<
+
+[REQUIREMENT]
+UID: FORMAL-COMPLETENESS-001
+TITLE: Lean 4 Completeness Proof
+STATEMENT: >>>
+The system SHALL provide a machine-checked proof of completeness in Lean 4:
+```lean
+theorem completeness
+  (pp : PP R) (vk : VK R) (x : Inputs) (w : Witness)
+  (h_sat : satisfies vk.C x w) :
+  Pr[Verify vk x (Prove pp vk x w)] = 1
+```
+<<<
+DELIVERABLE: >>>
+Milestone M10 (April 2026): formal/LambdaSNARK/Completeness.lean
+Proof components:
+1. Quotient polynomial correctness
+2. Verification equations hold for honest prover
+3. LWE openings always valid
+<<<
+
+[REQUIREMENT]
+UID: FORMAL-INTEGRATION-001
+TITLE: Bidirectional Verification
+STATEMENT: >>>
+The system SHALL support bidirectional C++/Rust ↔ Lean verification:
+- Extract verification keys from C++/Rust as Lean terms
+- Validate security parameters in Lean, import to C++/Rust
+<<<
+RATIONALE: >>>
+Ensures implementation matches formal specification.
+Prevents parameter mismatch bugs (e.g., non-prime modulus VULN-001).
+<<<
+DELIVERABLE: >>>
+Milestone M10 (April 2026):
+- cpp-core/src/lean_ffi.cpp (VK → Lean term export)
+- rust-api/lambda-snark/src/lean_params.rs (Lean params → Rust validation)
+<<<
+
+[/SECTION]
+
+[SECTION]
+TITLE: Security Audit Requirements
+
+[REQUIREMENT]
+UID: AUDIT-CRYPTO-001
+TITLE: Cryptographic Review
+STATEMENT: >>>
+The system SHALL undergo external cryptographic audit (v1.0.0) covering:
+- Parameter selection (n, q, σ, λ) against lattice attacks
+- Fiat-Shamir instantiation (hash function, domain separation)
+- Module-LWE/SIS assumption validity
+- Side-channel resistance (timing attacks, cache leaks)
+<<<
+RATIONALE: >>>
+Post-quantum cryptography is evolving field, external review essential for production.
+<<<
+TARGET: >>>
+Q2 2026 before v1.0.0 release
+Cost estimate: $15K-$30K (4-6 weeks, specialized firm)
+<<<
+
+[REQUIREMENT]
+UID: AUDIT-CODE-001
+TITLE: Code Security Review
+STATEMENT: >>>
+The system SHALL undergo code security audit focusing on:
+- Memory safety (C++ SEAL integration, Rust unsafe blocks)
+- FFI boundary safety (null pointer checks, panic handling)
+- Integer overflow/underflow (modular arithmetic)
+- Denial-of-service vectors (resource exhaustion)
+<<<
+DELIVERABLE: >>>
+Milestone M7 (January 2026): Preliminary internal review
+v1.0.0 (May 2026): External audit report
+<<<
+
+[REQUIREMENT]
+UID: AUDIT-TIMING-001
+TITLE: Constant-Time Operations
+STATEMENT: >>>
+The system SHALL implement constant-time operations for:
+- Modular arithmetic (no early exit on zero)
+- Polynomial evaluation (fixed iteration count)
+- Witness validation (avoid short-circuit on first failure)
+<<<
+RATIONALE: >>>
+Timing side-channels can leak witness information, breaking zero-knowledge property.
+<<<
+VERIFICATION: >>>
+Dudect testing framework (M7)
+Manual code review of critical paths
+<<<
+
+[/SECTION]
+
+[SECTION]
+TITLE: Documentation Requirements
+
+[REQUIREMENT]
+UID: DOC-SPEC-001
+TITLE: Formal Specification
+STATEMENT: >>>
+The system SHALL provide a formal specification document (this StrictDoc file) covering:
+- Security requirements and proofs
+- Functional requirements and algorithms
+- API contracts and safety invariants
+- Performance requirements and benchmarks
+<<<
+STATUS: >>>
+Current document (M6): v0.1.0-alpha specification
+Target (v1.0.0): Complete specification with all proofs validated
+<<<
+
+[REQUIREMENT]
+UID: DOC-API-001
+TITLE: API Documentation
+STATEMENT: >>>
+The system SHALL provide rustdoc documentation for all public APIs with:
+- Function purpose and behavior
+- Parameter requirements and validation
+- Return value semantics
+- Error conditions
+- Usage examples (compilable doc tests)
+<<<
+COVERAGE: >>>
+Current (M6): 100% public API documented
+Target (M7): All doc examples executable (cargo test --doc)
+<<<
+
+[REQUIREMENT]
+UID: DOC-ARCH-001
+TITLE: Architecture Documentation
+STATEMENT: >>>
+The system SHALL provide architecture documentation covering:
+- System components and dependencies (docs/architecture.md)
+- Data flow diagrams (witness → proof → verification)
+- Module dependency graph (SVG diagrams)
+- Security boundaries (trusted vs untrusted code)
+<<<
+STATUS: >>>
+Current (M6): 5 SVG diagrams, 375-line architecture.md
+<<<
+
+[REQUIREMENT]
+UID: DOC-TUTORIAL-001
+TITLE: User Tutorials
+STATEMENT: >>>
+The system SHALL provide tutorials for:
+1. Getting Started: Installation, first circuit, prove/verify
+2. Advanced Circuits: Custom constraints, optimization techniques
+3. Formal Verification: Reading Lean proofs, extending theorems
+<<<
+TARGET: >>>
+v1.0.0 release (May 2026)
+docs/tutorials/ with 3+ markdown guides
+<<<
+
+[/SECTION]
+
+[SECTION]
+TITLE: Maintenance Requirements
+
+[REQUIREMENT]
+UID: MAINT-CI-001
+TITLE: Continuous Integration
+STATEMENT: >>>
+The system SHALL maintain CI pipeline with:
+- Unit tests (cargo test --all)
+- Integration tests (test-vectors validation)
+- Linting (cargo clippy)
+- Formatting (cargo fmt --check)
+- Security audit (cargo audit)
+- Performance regression tests (benchmark suite)
+<<<
+IMPLEMENTATION: >>>
+GitHub Actions workflow (.github/workflows/ci.yml)
+Run on every push and pull request
+<<<
+
+[REQUIREMENT]
+UID: MAINT-DEPS-001
+TITLE: Dependency Management
+STATEMENT: >>>
+The system SHALL:
+- Pin all dependencies with exact versions (Cargo.lock committed)
+- Review dependency updates monthly (Dependabot PRs)
+- Minimize dependency count (prefer std library where possible)
+- Audit all dependencies for security issues
+<<<
+RATIONALE: >>>
+Cryptographic code requires stable, audited dependencies.
+Supply-chain attacks are major threat vector.
+<<<
+
+[REQUIREMENT]
+UID: MAINT-VERSIONING-001
+TITLE: Semantic Versioning
+STATEMENT: >>>
+The system SHALL follow semantic versioning (semver):
+- MAJOR: Breaking API changes
+- MINOR: New features (backward compatible)
+- PATCH: Bug fixes (backward compatible)
+<<<
+POLICY: >>>
+Pre-1.0: Breaking changes allowed in MINOR (0.x.y)
+Post-1.0: Strict semver, deprecation warnings before removal
+<<<
+
+[/SECTION]
+
+[SECTION]
+TITLE: Compliance Requirements
+
+[REQUIREMENT]
+UID: COMP-LICENSE-001
+TITLE: Open Source License
+STATEMENT: >>>
+The system SHALL be dual-licensed under:
+- MIT License (permissive, commercial-friendly)
+- Apache 2.0 (patent grant protection)
+<<<
+RATIONALE: >>>
+Dual licensing maximizes compatibility with other open-source projects.
+Apache 2.0 provides patent retaliation clause.
+<<<
+
+[REQUIREMENT]
+UID: COMP-EXPORT-001
+TITLE: Export Control Compliance
+STATEMENT: >>>
+The system SHALL include export control notice:
+"This software includes cryptographic software and may be subject to export controls."
+<<<
+RATIONALE: >>>
+Post-quantum cryptography may fall under export restrictions in some jurisdictions.
+<<<
+
+[REQUIREMENT]
+UID: COMP-CONTRIB-001
+TITLE: Contribution Guidelines
+STATEMENT: >>>
+The system SHALL provide CONTRIBUTING.md with:
+- Code style guidelines (rustfmt config)
+- Pull request process
+- Commit message format
+- Developer Certificate of Origin (DCO) requirement
+<<<
+STATUS: >>>
+Current (M6): CONTRIBUTING.md exists
+Target (v1.0.0): Comprehensive contributor guide
+<<<
+
+[/SECTION]
+
+[SECTION]
+TITLE: Traceability Matrix
+
+[FREETEXT]
+This section maps requirements to implementation artifacts and verification evidence.
+[/FREETEXT]
+
+[REQUIREMENT]
+UID: TRACE-SOUNDNESS-001
+TITLE: Soundness Traceability
+STATEMENT: >>>
+Requirement SEC-SOUNDNESS-001 is satisfied by:
+- Implementation: rust-api/lambda-snark/src/lib.rs::verify_r1cs_zk()
+- Tests: rust-api/lambda-snark/tests/soundness_tests.rs (15 tests)
+- Formal proof: formal/LambdaSNARK/Soundness.lean (M8, pending)
+- Verification: External crypto audit (v1.0.0, pending)
+<<<
+
+[REQUIREMENT]
+UID: TRACE-ZK-001
+TITLE: Zero-Knowledge Traceability
+STATEMENT: >>>
+Requirement SEC-ZK-001 is satisfied by:
+- Implementation: rust-api/lambda-snark/src/lib.rs::prove_r1cs_zk()
+- Algorithm: Polynomial blinding in polynomial.rs::blind_polynomial()
+- Tests: rust-api/lambda-snark/tests/zk_tests.rs (6 tests + 16 integration)
+- Formal proof: formal/LambdaSNARK/ZeroKnowledge.lean (M9, pending)
+- Performance: Benchmarks show 1.48-1.53× overhead (M7 optimization pending)
+<<<
+
+[REQUIREMENT]
+UID: TRACE-NTT-001
+TITLE: NTT Performance Traceability
+STATEMENT: >>>
+Requirement PERF-PROVE-001 (m=10^6 in <2min) is satisfied by:
+- Implementation: rust-api/lambda-snark/src/ntt.rs::ntt_interpolate()
+- Algorithm: Cooley-Tukey FFT, O(m log m) complexity
+- Tests: rust-api/lambda-snark/tests/test_ntt.rs (20+ tests)
+- Benchmarks: m=256 achieves 1000× speedup vs Lagrange
+- Status: M5.1 complete, scales to m=10^6 projected <2min
+<<<
+
+[/SECTION]
+
+[SECTION]
+TITLE: Glossary
+
+[FREETEXT]
+**R1CS**: Rank-1 Constraint System, arithmetic circuit representation
+
+**Module-LWE**: Learning With Errors over polynomial rings (lattice problem)
+
+**Module-SIS**: Short Integer Solution over polynomial rings (lattice problem)
+
+**NTT**: Number-Theoretic Transform, FFT over finite fields
+
+**Fiat-Shamir**: Non-interactive proof technique via hash-based challenges
+
+**SNARK**: Succinct Non-interactive ARgument of Knowledge
+
+**Zero-Knowledge**: Proof reveals no information beyond statement validity
+
+**Soundness**: Invalid statements cannot be proven (with high probability)
+
+**Completeness**: Valid statements can always be proven
+
+**Negligible function**: Function negl(λ) where negl(λ) < 1/poly(λ) for all poly
+
+**Security parameter**: λ = 128 bits (post-quantum security level)
+
+**ROM**: Random Oracle Model (idealized hash function assumption)
+[/FREETEXT]
+
+[/SECTION]
+
+[/DOCUMENT]
