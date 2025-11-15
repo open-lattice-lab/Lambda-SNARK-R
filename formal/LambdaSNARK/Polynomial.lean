@@ -41,11 +41,18 @@ noncomputable def vanishing_poly {F : Type} [Field F] (m : ℕ) (ω : F) : Polyn
 -- Lagrange Basis Polynomials
 -- ============================================================================
 
+/-- Helper: Primitive m-th root of unity is injective on Fin m -/
+lemma primitive_root_injective {F : Type} [Field F] (m : ℕ) (ω : F)
+    (h_omega : ω ^ m = 1) (h_prim : ∀ k : Fin m, k.val ≠ 0 → ω ^ k.val ≠ 1)
+    (i j : Fin m) : ω ^ i.val = ω ^ j.val → i = j := by
+  sorry  -- TODO: Standard fact about primitive roots: ω^i = ω^j ⟹ i = j for i,j < m
+
 /-- Lagrange basis polynomial Lᵢ(X) = ∏_{j≠i} (X - ωʲ) / (ωⁱ - ωʲ) -/
 noncomputable def lagrange_basis {F : Type} [Field F] [DecidableEq (Fin 1)] (m : ℕ) (ω : F) (i : Fin m) : Polynomial F :=
   let numerator := ∏ j : Fin m, if j = i then (1 : Polynomial F) else (Polynomial.X - Polynomial.C (ω ^ j.val))
   let denominator := ∏ j : Fin m, if j = i then (1 : F) else (ω ^ i.val - ω ^ j.val)
   Polynomial.C (1 / denominator) * numerator
+
 
 /-- Lagrange basis property: Lᵢ(ωʲ) = δᵢⱼ -/
 theorem lagrange_basis_property {F : Type} [Field F] [DecidableEq (Fin 1)] (m : ℕ) (ω : F) (i j : Fin m)
@@ -74,9 +81,12 @@ theorem lagrange_basis_property {F : Type} [Field F] [DecidableEq (Fin 1)] (m : 
       by_cases hk : k = i
       · simp [hk]
       · simp only [hk, if_false]
+        -- Use: ωⁱ ≠ ωᵏ for i ≠ k (from primitive_root_injective)
         intro h_eq
-        -- ωⁱ = ωᵏ ⟹ ω^(i-k) = 1 with i≠k ⟹ contradiction with primitivity
-        sorry  -- TODO: Requires ZMod subtraction and primitivity lemma
+        -- h_eq : ω^i - ω^k = 0 ⟹ ω^i = ω^k
+        have h_pow_eq : ω ^ i.val = ω ^ k.val := sub_eq_zero.mp h_eq
+        have h_inj : i = k := primitive_root_injective m ω h_omega h_prim i k h_pow_eq
+        exact hk h_inj.symm
     -- Now: (1/denom) * denom = 1
     rw [h_num_eval]
     field_simp [h_denom_ne_zero]
