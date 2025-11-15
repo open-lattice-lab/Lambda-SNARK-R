@@ -1,8 +1,9 @@
 # ROADMAP: ΛSNARK-R Development Plan
 
 > **Version**: 0.1.0-alpha  
-> **Last Updated**: November 15, 2025  
-> **Overall Progress**: 90% (M1-M6 complete, ready for M7)
+> **Last Updated**: November 15, 2025 (Risk Analysis Update)  
+> **Overall Progress**: 90% (M1-M6 complete, M10 prototype validated, ready for M7)  
+> **Risk Status**: 🟢 M10 de-risked, 🟠 Timeline adjusted (+3mo buffer)
 
 ---
 
@@ -15,16 +16,20 @@
 | **M3** | Sparse Matrices: R1CS data structures | ✅ Complete | 4 commits | 28 tests | 12h | ✅ Oct 2025 |
 | **M4** | R1CS Subsystem: Prover/verifier | ✅ Complete | 8 commits | 60 tests | 32h | ✅ Nov 2025 |
 | **M5** | Optimizations: FFT/NTT + Zero-Knowledge | ✅ Complete | 7 commits | 162+ tests | 18h | ✅ Nov 2025 |
-| **M6** | Documentation: Consolidation | ✅ Complete | 4 commits | - | 6h | ✅ Nov 2025 |
-| **M7** | Final Testing: Alpha release | 🔜 Planned | - | - | 8h | Jan 2026 |
-| **TOTAL** | Full alpha-quality system | 🔄 90% | 35 commits | 162+ tests | 138h | Q1 2026 |
+| **M6** | Documentation: Consolidation | ✅ Complete | 5 commits | - | 6h | ✅ Nov 2025 |
+| **M7** | Final Testing: Alpha release | 🔜 Planned | - | 200+ tests | 8h | Jan 2026 |
+| **M8** | Soundness Proof (Lean 4) | 🔜 Planned | - | - | 10-14w | Feb-Apr 2026 |
+| **M9** | Zero-Knowledge Proof (Lean 4) | 🔜 Planned | - | - | 6-8w | Apr-May 2026 |
+| **M10** | Completeness + Integration | 🟢 Prototyped | 1 commit | 116 tests | 4w | May-Jun 2026 |
+| **TOTAL** | Production v1.0.0 | 🔄 90% | 36 commits | 162+ tests | ~600h | Q2 2026 |
 
-**Key Metrics** (as of commit 0002772):
-- **Code**: 4,200+ lines (Rust implementation with NTT + ZK)
-- **Tests**: 162+ automated (100+ unit + 62+ integration)
+**Key Metrics** (as of commit 7d9ddce):
+- **Code**: 4,200+ lines Rust + 331 lines C++ (Lean FFI prototype)
+- **Tests**: 162+ automated (116 unit + 46 integration, 9 Lean FFI)
 - **Examples**: 3 CLI commands (multiplication, range proof, benchmark)
 - **Security**: 128-bit quantum (Module-LWE), soundness ε ≤ 2^-48, ✅ Zero-Knowledge
 - **Performance**: 224-byte ZK proofs, O(m log m) with NTT, <1ms prover for m=30
+- **M10 Risk**: 🟢 **DE-RISKED** — SEAL FFI feasible, C++ prototype working
 
 ---
 
@@ -650,64 +655,114 @@ Scaling: 1.30× growth (m=10→30), empirical exponent: 0.24
 
 ## 🚨 Known Issues & Risks
 
-### Critical Issues (Blockers for Production)
-1. **Non-Zero-Knowledge** (M5.2 blocker):
-   - Current proofs leak witness correlations
-   - Fix: Polynomial blinding in M5.2
-   - Impact: Cannot use for privacy-critical applications
+> **⚠️ IMPORTANT**: Risk analysis updated November 15, 2025  
+> **Status**: M10 de-risked, timeline adjusted, QROM gap identified
 
-2. **O(m²) Performance** (M5.1 blocker):
-   - Lagrange interpolation does not scale to m > 10^4
-   - Fix: NTT/FFT in M5.1
-   - Impact: Limited to small circuits (<1000 constraints)
+### Critical Issues (Blockers for Production)
+
+1. **QROM Security Gap** 🔴 **NEW** (M8.5 blocker):
+   - **Issue**: Fiat-Shamir soundness proven only in ROM, not QROM
+   - **Impact**: "Post-quantum" claims may be disputed without QROM proof
+   - **Risk**: Rewinding lemma in QROM significantly harder (quantum oracle access)
+   - **Options**:
+     - Option A: Prove QROM soundness (add M8.5, +2-3 weeks)
+     - Option B: Use QROM-secure FS variant (e.g., Unruh transform)
+     - Option C: Downgrade claims to "ROM-secure, QROM conjectured"
+   - **Recommendation**: Add M8.5 QROM Analysis (honest approach)
+   - **ETA**: March 2026 (after M8, before M9)
+
+2. **M8-M10 Timeline Optimistic** 🟠 **NEW** (Schedule risk):
+   - **Issue**: 9-12 weeks estimated, but first Lean formalization may take 20-26 weeks
+   - **Root cause**: 
+     - Mathlib4 probability theory underdeveloped
+     - Rewinding lemma requires non-trivial probability infrastructure
+     - First-time Lean users: 2× time multiplier realistic
+   - **Mitigation**: Add +3 month buffer (9-12w → 20-26w)
+   - **Revised ETA**: v1.0.0 May 2026 → **August 2026**
 
 3. **No Security Audit** (M7 blocker):
    - Timing attacks possible (non-constant-time modular ops)
    - Side-channel leaks (cache timing in LWE)
    - Fix: External audit + constant-time refactor
    - Impact: NOT production-ready until audited
+   - **Cost revised**: $15K-$30K → **$50K-$100K** (lattice crypto specialists rare)
 
-### Medium Issues (Deferred)
-4. **Composite Modulus Bug** (RESOLVED in d89f201):
+### Medium Issues (Mitigated/Tracked)
+
+4. ✅ **M10 FFI Feasibility** (RESOLVED — de-risked November 15, 2025):
+   - **Was**: Unknown if SEAL PublicKey/EncryptionParameters serializable
+   - **Now**: ✅ SEAL `save()`/`load()` methods confirmed working
+   - **Prototype**: C++ `lean_ffi.cpp` (331 lines) + Rust validation (537 lines)
+   - **Tests**: 116 passing (9 new Lean FFI integration tests)
+   - **Status**: 🟢 **LOW RISK** — M10 time estimate confirmed (2 weeks)
+   - **Docs**: `docs/development/seal-ffi-exploration.md`
+
+5. **Composite Modulus Bug** (RESOLVED in d89f201):
    - Was: 17592186044417 = 17 × ... (composite)
    - Now: 17592186044423 (prime, verified)
-   - Lesson: Verify primality for all security parameters
+   - Lesson: Primality validation now in `lean_params.rs` (prevents recurrence)
 
-5. **FFI Safety** (M7 concern):
+6. **FFI Safety** (M7 concern):
    - C++ SEAL code not memory-safe
    - Rust wrapper may have UB if SEAL panics
    - Fix: Comprehensive fuzzing + defensive checks
 
-6. **Documentation Gaps** (M6 in-progress):
-   - No formal specification document
-   - No architecture diagrams
-   - Fix: ROADMAP.md (this file), architecture.md
-
 ### Low Issues (Nice-to-Have)
-7. **No GUI**: CLI-only interface (acceptable for alpha)
-8. **Limited Examples**: Only 3 CLI examples (more in future)
-9. **No Benchmarks for m > 30**: Performance unknown at scale
+
+7. **Spec Traceability** (M6.7 planned):
+   - `specification.sdoc` separate from Lean formal model
+   - Risk: Spec drift (verify wrong properties)
+   - Fix: M6.7 — Manual checklist or automated tool (1 week)
+
+8. **No GUI**: CLI-only interface (acceptable for alpha)
+9. **Limited Examples**: Only 3 CLI examples (more in future)
 
 ---
 
-## 📅 Timeline
+## 📊 Risk Summary Table
+
+| Risk | Probability | Impact | Mitigation | Priority | Status |
+|------|-------------|--------|------------|----------|--------|
+| **QROM security gap** | Medium (50%) | High (credibility) | Add M8.5 or downgrade claims | 🟠 P1 | NEW |
+| **M8-M10 time overrun** | High (70%) | High (v1.0.0 delay) | Add +3mo buffer | 🔴 P0 | NEW |
+| **Audit cost exceed** | Medium (60%) | Medium (budget) | Raise $100K or basic audit | 🟠 P1 | NEW |
+| **M10 FFI blocked** | Low (20%) | High (M10 fail) | Rust-native LWE fallback | 🟢 RESOLVED | ✅ |
+| **Performance stuck (1.53×)** | Low (30%) | Low (alpha ok) | Adjust acceptance criteria | 🟡 P2 | Tracked |
+| **Spec drift** | Medium (40%) | Medium (verify wrong) | M6.7 traceability | 🟡 P2 | Planned |
+
+**Legend**: 🔴 P0 (Critical) | 🟠 P1 (High) | 🟡 P2 (Medium) | 🟢 Resolved
+
+---
+
+## 📅 Timeline (Revised November 15, 2025)
 
 ```
 October 2025:   M1 ✅ M2 ✅ M3 ✅
-November 2025:  M4 ✅ M5 ✅ M6 ✅
-January 2026:   M7 🔜 Alpha Release 🎉
-Feb-Apr 2026:   M8 🔜 M9 🔜 M10 🔜 (Formal Verification)
-May 2026:       v1.0.0 🎯 Production Release
-Q2-Q3 2026:     Security audit + external review
+November 2025:  M4 ✅ M5 ✅ M6 ✅ + M10 Prototype ✅
+January 2026:   M7 🔜 Alpha Release 0.1.0-alpha
+February 2026:  M8 🔜 Soundness Proof (Lean 4, 10-14 weeks)
+March 2026:     M8.5 🔜 QROM Analysis (2-3 weeks) [NEW]
+April-May 2026: M9 🔜 Zero-Knowledge Proof (6-8 weeks)
+May-June 2026:  M10 🔜 Completeness + Integration (4 weeks)
+August 2026:    v1.0.0 🎯 Production Release [REVISED: was May 2026]
+Q3-Q4 2026:     Security audit ($50K-$100K) + external review
 ```
+
+**Timeline Changes**:
+- ✅ M10 prototype completed **4 months early** (risk mitigation)
+- ⚠️ M8-M10 extended: 9-12w → 20-26w (+3mo buffer for Lean formalization)
+- 🆕 M8.5 added: QROM security analysis (2-3 weeks)
+- 📅 v1.0.0 pushed: May → **August 2026** (realistic estimate)
 
 **Next Immediate Steps**:
 1. ✅ Complete ROADMAP.md (this file) — **Nov 15, 2025**
 2. ✅ Formal specification (docs/spec/specification.sdoc) — **Nov 15, 2025**
-3. 🔜 M7 Final Testing (performance fix, 200+ tests) — **Jan 2026**
-4. 🔜 M8 Soundness Proof (Lean 4) — **Feb 2026**
-5. 🔜 M9 Zero-Knowledge Proof (Lean 4) — **Mar 2026**
-6. 🔜 M10 Completeness + Integration — **Apr 2026**
+3. ✅ M10 Lean FFI prototype (C++ + Rust) — **Nov 15, 2025**
+4. 🔜 M7 Final Testing (performance fix, 200+ tests) — **Jan 2026**
+5. 🔜 M8 Soundness Proof (Lean 4) — **Feb-Apr 2026**
+6. 🔜 M8.5 QROM Analysis — **Mar 2026**
+7. 🔜 M9 Zero-Knowledge Proof (Lean 4) — **Apr-May 2026**
+8. 🔜 M10 Completeness + Integration — **May-Jun 2026**
 
 ---
 
@@ -816,8 +871,11 @@ Q2-Q3 2026:     Security audit + external review
 
 **Goal**: Machine-checked proof of knowledge soundness in Lean 4  
 **Status**: 🔜 Planned  
-**ETA**: February 2026 (4-6 weeks)  
-**Time**: 160-240 hours (4-6 weeks × 40h/week)
+**ETA**: February-April 2026 (**REVISED**: 10-14 weeks, was 4-6 weeks)  
+**Time**: 400-560 hours (10-14 weeks × 40h/week) **[+3mo buffer added]**
+
+> **⚠️ Timeline Revised**: First Lean formalization is 2× harder than estimated.  
+> Mathlib4 probability theory gaps + rewinding lemma complexity require buffer.
 
 ### Deliverables
 
@@ -827,7 +885,7 @@ Q2-Q3 2026:     Security audit + external review
   - Extractor definition: Rewinding adversary at Fiat-Shamir challenges
   - Success probability analysis: Pr[extract] ≥ ε² - negl(λ)
   - Witness recovery: Solve Q(α₁) - Q(α₂) for polynomial coefficients
-- **Time**: 2 weeks
+- **Time**: 4 weeks (was 2w, +100% for first-time formalization)
 
 #### M8.2: Rewinding Lemma Proof
 - **File**: `formal/LambdaSNARK/RewindingLemma.lean` (+150 lines)
@@ -840,7 +898,8 @@ Q2-Q3 2026:     Security audit + external review
         Verify vk x (A.run_with_challenge α₂)] ≥ ε² - negl(λ)
   ```
 - **Technique**: Forking lemma from Fiat-Shamir literature
-- **Time**: 1.5 weeks
+- **Challenge**: Mathlib4 probability theory may need custom infrastructure
+- **Time**: 3 weeks (was 1.5w, +100% for probability infrastructure)
 
 #### M8.3: Module-SIS Reduction
 - **File**: `formal/LambdaSNARK/SISReduction.lean` (+200 lines)
@@ -852,16 +911,16 @@ Q2-Q3 2026:     Security audit + external review
     ∃ (s : SIS_Solution), Module_SIS_Verify pp.vc_pp s = true
   ```
 - **Proof sketch**: Extractor failure + verification success → collision in LWE commitment → SIS solution
-- **Time**: 1.5 weeks
+- **Time**: 3 weeks (was 1.5w, +100% for lattice crypto formalization)
 
 #### M8.4: Integration Test (Lean ↔ Rust)
 - **File**: `formal/LambdaSNARK/Integration.lean` (+100 lines)
 - **Tests**:
-  - Export Rust VK to Lean term
+  - Export Rust VK to Lean term (using `lean_export.rs` prototype)
   - Verify proof in Lean using extracted VK
-  - Validate parameter consistency (n, q, σ, λ)
-- **Implementation**: `rust-api/lambda-snark/src/lean_ffi.rs`
-- **Time**: 1 week
+  - Validate parameter consistency (n, q, σ, λ) via `lean_params.rs`
+- **Implementation**: ✅ **Already prototyped** (commit 7d9ddce)
+- **Time**: 1 week (validate prototype + integration tests)
 
 ### Artifacts
 ```
@@ -883,9 +942,70 @@ artifacts/
 - **Consultation**: Cryptographer review of proof strategy
 
 ### Known Risks
-- **Proof complexity**: Rewinding lemma may require stronger ROM assumptions
-- **Mathlib gaps**: Probability theory in Lean 4 still developing
-- **Time estimate**: 4-6 weeks assumes experienced Lean user (may be 8w for first-time)
+- **Proof complexity**: Rewinding lemma requires stronger ROM assumptions (QROM gap — see M8.5)
+- **Mathlib gaps**: Probability theory in Lean 4 underdeveloped → may need custom infrastructure (+4w)
+- **Time estimate**: 10-14 weeks revised (was 4-6w, +100% for first-time Lean formalization)
+- **Consultation needed**: Cryptographer review of proof strategy before starting (1w prep)
+
+---
+
+## 🆕 M8.5: QROM Security Analysis (NEW — CRITICAL)
+
+**Goal**: Close quantum ROM security gap for "post-quantum" claims  
+**Status**: 🔜 Planned (added November 15, 2025)  
+**ETA**: March 2026 (2-3 weeks, after M8, before M9)  
+**Time**: 80-120 hours
+
+> **Why needed**: Current Fiat-Shamir soundness proven only in ROM (classical random oracle).  
+> QROM (quantum random oracle) requires separate analysis for quantum adversaries.  
+> Without QROM proof, "128-bit quantum security" claims are incomplete.
+
+### Deliverables
+
+#### M8.5.1: QROM Literature Review
+- **Research**: Survey QROM-secure Fiat-Shamir constructions
+- **Options**:
+  1. Unruh transform (deterministic FS variant, QROM-secure)
+  2. Direct QROM soundness proof (rewinding in QROM harder)
+  3. Tight security analysis (may lose factor ~q)
+- **Output**: Technical report with recommendation
+- **Time**: 1 week
+
+#### M8.5.2: QROM Soundness Proof (Option A) OR Implementation Change (Option B)
+- **Option A**: Prove QROM soundness for current scheme
+  - **File**: `formal/LambdaSNARK/QROMSoundness.lean` (+300 lines)
+  - **Challenge**: Quantum rewinding non-trivial (oracle in superposition)
+  - **Time**: 1.5 weeks
+
+- **Option B**: Implement Unruh transform
+  - **File**: `rust-api/lambda-snark/src/fiat_shamir_unruh.rs` (+200 lines)
+  - **Change**: Add deterministic challenge derivation
+  - **Benefit**: QROM security "for free" (well-studied construction)
+  - **Cost**: Proof size increase ~30% (extra transcript data)
+  - **Time**: 0.5 weeks
+
+#### M8.5.3: Documentation Update
+- **Files**: `SECURITY.md`, `docs/spec/specification.sdoc`, `ROADMAP.md`
+- **Content**: Clarify QROM security status (proven OR conjectured)
+- **Time**: 0.5 weeks
+
+### Success Criteria
+- ✅ Either QROM soundness proof OR Unruh transform implemented
+- ✅ Security claims accurately reflect ROM vs. QROM status
+- ✅ Academic review: cryptographer validates approach
+
+### Dependencies
+- **M8**: Soundness proof (rewinding lemma foundation)
+- **Consultation**: QROM expert review (external, 1-2 hours)
+
+### Known Risks
+- **Proof complexity**: QROM rewinding may be infeasible → pivot to Unruh
+- **Performance impact**: Unruh transform increases proof size ~30%
+- **Timeline**: Could extend to 4 weeks if QROM proof attempted and fails
+
+### Recommendation
+**Start with Option B (Unruh transform)** — lower risk, well-understood, 0.5w implementation.  
+If time permits, attempt Option A (QROM proof) for stronger result.
 
 ---
 
@@ -893,7 +1013,7 @@ artifacts/
 
 **Goal**: Machine-checked proof of zero-knowledge property in Lean 4  
 **Status**: 🔜 Planned  
-**ETA**: March 2026 (3-4 weeks)  
+**ETA**: April-May 2026 (**REVISED**: 6-8 weeks, was 3-4 weeks)  
 **Time**: 120-160 hours
 
 ### Deliverables
