@@ -103,7 +103,7 @@ impl Polynomial {
         
         for coeff in self.coeffs.iter().rev().skip(1) {
             // result = result * alpha + coeff (mod q)
-            result = (mul_mod(result, alpha.value(), self.modulus) + coeff.value()) % self.modulus;
+            result = ((mul_mod(result, alpha.value(), self.modulus) as u128 + coeff.value() as u128) % self.modulus as u128) as u64;
         }
         
         Field::new(result)
