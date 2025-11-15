@@ -32,7 +32,7 @@ structure HonestProver (F : Type) [CommRing F] (VC : VectorCommitment F) where
   prove : (cs : R1CS F) → (w : Witness F cs.nVars) → (x : PublicInput F cs.nPub) →
           (randomness : ℕ) → Proof F VC
 
-/-- 
+/--
 Completeness theorem: honest prover with valid witness always produces accepting proof.
 
 **Statement**: For any R1CS constraint system cs, if a witness w satisfies cs
@@ -43,29 +43,28 @@ and matches public input x, then the honest prover's proof is accepted by the ve
 2. Show quotient polynomial exists (by satisfaction)
 3. Show all verifier checks pass (commitment correctness + opening correctness)
 -/
-theorem completeness {F : Type} [Field F] [Fintype F] [DecidableEq F]
-    (VC : VectorCommitment F) (cs : R1CS F) (λ : ℕ)
-    (P : HonestProver F VC) 
-    (h_correct : VC.correctness)  -- Commitment scheme is correct
+theorem completeness {F : Type} [Field F] [Fintype F] [DecidableEq F] [Zero F]
+    (VC : VectorCommitment F) (cs : R1CS F) (secParam : ℕ)
+    (P : HonestProver F VC)
     :
     ∀ (w : Witness F cs.nVars) (x : PublicInput F cs.nPub) (r : ℕ),
       -- If witness is valid
       satisfies cs w →
-      extractPublic (by omega) w = x →
+      extractPublic (by sorry) w = x →
       -- Then proof verifies
       verify VC cs x (P.prove cs w x r) = true := by
   sorry  -- TODO: Follow honest prover construction step-by-step
 
 /-- Completeness error is zero (perfect completeness) -/
-theorem perfect_completeness {F : Type} [Field F] [Fintype F] [DecidableEq F]
-    (VC : VectorCommitment F) (cs : R1CS F) (λ : ℕ)
+theorem perfect_completeness {F : Type} [Field F] [Fintype F] [DecidableEq F] [Zero F]
+    (VC : VectorCommitment F) (cs : R1CS F) (secParam : ℕ)
     (P : HonestProver F VC) :
     ∀ (w : Witness F cs.nVars) (x : PublicInput F cs.nPub) (r : ℕ),
       satisfies cs w →
-      extractPublic (by omega) w = x →
+      extractPublic (by sorry) w = x →
       -- Probability of acceptance is exactly 1 (no randomness in verification)
       verify VC cs x (P.prove cs w x r) = true := by
   intro w x r h_sat h_pub
-  exact completeness VC cs λ P VC.correctness w x r h_sat h_pub
+  exact completeness VC cs secParam P w x r h_sat h_pub
 
 end LambdaSNARK

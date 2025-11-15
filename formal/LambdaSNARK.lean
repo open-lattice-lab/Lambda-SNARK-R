@@ -17,13 +17,13 @@ Root module for ΛSNARK-R formal verification in Lean 4.
 
 ## Main Theorems
 
-1. **Soundness** (`knowledge_soundness`): 
+1. **Soundness** (`knowledge_soundness`):
    Extractable witness from accepting proofs
 
-2. **Completeness** (`completeness`): 
+2. **Completeness** (`completeness`):
    Valid witnesses always produce accepting proofs
 
-3. **Zero-Knowledge** (TODO): 
+3. **Zero-Knowledge** (TODO):
    Proofs reveal nothing beyond validity
 
 ## Usage

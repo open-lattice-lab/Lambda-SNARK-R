@@ -5,6 +5,7 @@ Authors: URPKS Contributors
 -/
 
 import LambdaSNARK.Core
+import LambdaSNARK.Polynomial  -- Import vanishing_poly
 import Mathlib.Probability.ProbabilityMassFunction.Basic
 import Mathlib.Data.Real.Basic
 import Mathlib.Tactic
@@ -13,7 +14,7 @@ import Mathlib.Tactic
 # ΛSNARK-R Soundness
 
 Soundness theorem: if a prover can produce an accepting proof for public input x
-with non-negligible probability ε, then there exists a PPT extractor E that can 
+with non-negligible probability ε, then there exists a PPT extractor E that can
 extract a valid witness w satisfying the R1CS constraints.
 
 ## Main Results
@@ -43,13 +44,13 @@ open BigOperators Polynomial
 -- Negligible Functions
 -- ============================================================================
 
-/-- A function ε(λ) is negligible if it decreases faster than any polynomial -/
+/-- A function ε(secParam) is negligible if it decreases faster than any polynomial -/
 def Negligible (ε : ℕ → ℝ) : Prop :=
-  ∀ c : ℕ, ∃ λ₀ : ℕ, ∀ λ ≥ λ₀, ε λ < 1 / (λ ^ c : ℝ)
+  ∀ c : ℕ, ∃ secParam₀ : ℕ, ∀ secParam ≥ secParam₀, ε secParam < 1 / (secParam ^ c : ℝ)
 
-/-- Non-negligible bound: ε(λ) ≥ 1/poly(λ) -/
+/-- Non-negligible bound: ε(secParam) ≥ 1/poly(secParam) -/
 def NonNegligible (ε : ℕ → ℝ) : Prop :=
-  ∃ c : ℕ, ∃ λ₀ : ℕ, ∀ λ ≥ λ₀, ε λ ≥ 1 / (λ ^ c : ℝ)
+  ∃ c : ℕ, ∃ secParam₀ : ℕ, ∀ secParam ≥ secParam₀, ε secParam ≥ 1 / (secParam ^ c : ℝ)
 
 -- ============================================================================
 -- Adversary and Extractor
@@ -62,7 +63,7 @@ structure Adversary (F : Type) [CommRing F] (VC : VectorCommitment F) where
 
 /-- Witness extractor (uses adversary as black box) -/
 structure Extractor (F : Type) [CommRing F] (VC : VectorCommitment F) where
-  extract : (A : Adversary F VC) → (cs : R1CS F) → (x : PublicInput F cs.nPub) → 
+  extract : (A : Adversary F VC) → (cs : R1CS F) → (x : PublicInput F cs.nPub) →
             Option (Witness F cs.nVars)
   poly_time : Prop  -- Runtime bounded by polynomial in adversary's runtime
 
@@ -71,25 +72,24 @@ structure Extractor (F : Type) [CommRing F] (VC : VectorCommitment F) where
 -- ============================================================================
 
 /-- Schwartz-Zippel: Non-zero polynomial has few roots in finite field -/
-theorem schwartz_zippel {F : Type} [Field F] [Fintype F] 
+theorem schwartz_zippel {F : Type} [Field F] [Fintype F] [DecidableEq F]
     (p : Polynomial F) (hp : p ≠ 0) :
     (Finset.univ.filter (fun α => p.eval α = 0)).card ≤ p.natDegree := by
-  sorry  -- TODO: Proof from Mathlib or direct construction
+  -- Mathlib has Polynomial.card_roots': p.roots.card ≤ p.natDegree
+  -- Need to show filter univ (eval = 0) ≤ roots.card
+  -- This requires: roots captures all zeros in field
+  sorry  -- TODO: Use Multiset.toFinset_card_le + Polynomial.mem_roots'
 
 -- ============================================================================
--- Vanishing Polynomial
+-- Quotient Polynomial Existence
 -- ============================================================================
-
-/-- Vanishing polynomial Z_H(X) = ∏ᵢ (X - ωⁱ) for domain H = {1, ω, ω², ..., ωᵐ⁻¹} -/
-def vanishing_poly {F : Type} [Field F] (m : ℕ) (ω : F) : Polynomial F :=
-  ∏ i : Fin m, (Polynomial.X - Polynomial.C (ω ^ i.val))
 
 /-- Quotient polynomial exists iff witness satisfies R1CS -/
-theorem quotient_exists_iff_satisfies {F : Type} [Field F] 
+theorem quotient_exists_iff_satisfies {F : Type} [Field F] [DecidableEq F] [Zero F]
     (cs : R1CS F) (z : Witness F cs.nVars) (m : ℕ) (ω : F)
     (h_m : m = cs.nCons) (h_root : ω ^ m = 1) :
-    satisfies cs z ↔ 
-    ∃ q : Polynomial F, 
+    satisfies cs z ↔
+    ∃ q : Polynomial F,
       ∀ i : Fin cs.nCons,
         constraintPoly cs z i = 0 ∧
         (Polynomial.eval (ω ^ i.val) q) * (Polynomial.eval (ω ^ i.val) (vanishing_poly m ω)) = 0 := by
@@ -101,9 +101,9 @@ theorem quotient_exists_iff_satisfies {F : Type} [Field F]
 
 /-- Forking Lemma: If adversary succeeds with prob ε, can extract witness -/
 theorem forking_lemma {F : Type} [Field F] [Fintype F] [DecidableEq F]
-    (VC : VectorCommitment F) (cs : R1CS F) 
-    (A : Adversary F VC) (ε : ℝ) (λ : ℕ)
-    (h_success : ε ≥ 1 / (λ ^ 2 : ℝ))  -- Non-negligible success probability
+    (VC : VectorCommitment F) (cs : R1CS F)
+    (A : Adversary F VC) (ε : ℝ) (secParam : ℕ)
+    (h_success : ε ≥ 1 / (secParam ^ 2 : ℝ))  -- Non-negligible success probability
     (h_sis : ModuleSIS_Hard 256 2 12289 1024)  -- Module-SIS assumption
     :
     ∃ (E : Extractor F VC),
@@ -111,19 +111,19 @@ theorem forking_lemma {F : Type} [Field F] [Fintype F] [DecidableEq F]
         -- If adversary produces valid proof with prob ε
         (∃ π, verify VC cs x π = true) →
         -- Then extractor finds witness with prob ≥ ε² - negl(λ)
-        (∃ w, satisfies cs w ∧ extractPublic (by omega) w = x) := by
+        (∃ w, satisfies cs w ∧ extractPublic (by sorry) w = x) := by
   sorry  -- TODO: Rewinding + challenge-response extraction
 
 -- ============================================================================
 -- Knowledge Soundness (Main Theorem)
 -- ============================================================================
 
-/-- 
+/--
 Main soundness theorem: under Module-SIS and Random Oracle Model,
 if an adversary can produce accepting proofs with non-negligible probability,
 then there exists an extractor that recovers a valid witness.
 
-**Statement**: For any PPT adversary A that produces accepting proofs for 
+**Statement**: For any PPT adversary A that produces accepting proofs for
 public input x with probability ε(λ) ≥ 1/poly(λ), there exists a PPT extractor E
 such that E extracts a witness w satisfying:
 - R1CS constraints: satisfies cs w
@@ -136,8 +136,8 @@ such that E extracts a witness w satisfying:
 3. Compute witness from quotient polynomial difference
 4. Verify extracted witness satisfies R1CS via Schwartz-Zippel
 -/
-theorem knowledge_soundness {F : Type} [Field F] [Fintype F] [DecidableEq F]
-    (VC : VectorCommitment F) (cs : R1CS F) (λ : ℕ)
+theorem knowledge_soundness {F : Type} [Field F] [Fintype F] [DecidableEq F] [Zero F]
+    (VC : VectorCommitment F) (cs : R1CS F) (secParam : ℕ)
     (A : Adversary F VC) (ε : ℕ → ℝ)
     (h_non_negl : NonNegligible ε)
     (h_sis : ModuleSIS_Hard 256 2 12289 1024)  -- Module-SIS hardness
@@ -149,9 +149,9 @@ theorem knowledge_soundness {F : Type} [Field F] [Fintype F] [DecidableEq F]
         -- If adversary wins
         (∃ π, verify VC cs x π = true) →
         -- Extractor finds witness
-        (∃ w : Witness F cs.nVars, 
-          satisfies cs w ∧ 
-          extractPublic (by omega) w = x) := by
+        (∃ w : Witness F cs.nVars,
+          satisfies cs w ∧
+          extractPublic (by sorry) w = x) := by
   sorry  -- TODO: Combine forking lemma + Schwartz-Zippel + binding property
 
 end LambdaSNARK
