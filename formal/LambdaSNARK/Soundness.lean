@@ -75,10 +75,17 @@ structure Extractor (F : Type) [CommRing F] (VC : VectorCommitment F) where
 theorem schwartz_zippel {F : Type} [Field F] [Fintype F] [DecidableEq F]
     (p : Polynomial F) (hp : p ≠ 0) :
     (Finset.univ.filter (fun α => p.eval α = 0)).card ≤ p.natDegree := by
-  -- Mathlib has Polynomial.card_roots': p.roots.card ≤ p.natDegree
-  -- Need to show filter univ (eval = 0) ≤ roots.card
-  -- This requires: roots captures all zeros in field
-  sorry  -- TODO: Use Multiset.toFinset_card_le + Polynomial.mem_roots'
+  -- Use Mathlib's Polynomial.card_roots': p.roots.card ≤ p.natDegree
+  -- Show: filter univ (eval = 0) ≤ roots.toFinset ≤ roots.card
+  have h1 : (Finset.univ.filter (fun α => p.eval α = 0)).card ≤ p.roots.toFinset.card := by
+    apply Finset.card_le_card
+    intro α hα
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hα
+    rw [Multiset.mem_toFinset]
+    exact Polynomial.mem_roots hp |>.mpr hα
+  have h2 : p.roots.toFinset.card ≤ p.roots.card := Multiset.toFinset_card_le p.roots
+  have h3 : p.roots.card ≤ p.natDegree := Polynomial.card_roots' p
+  omega
 
 -- ============================================================================
 -- Quotient Polynomial Existence
