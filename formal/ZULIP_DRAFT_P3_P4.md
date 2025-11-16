@@ -1,8 +1,10 @@
 # Polynomial Division in Fields — API Question
 
-**Status**: 🔍 POSTED TO ZULIP (awaiting response)  
+**Status**: ✅ POSTED TO ZULIP (2025-11-16)  
 **Date**: 2025-11-16  
-**Context**: Formal verification of Lambda-SNARK-R cryptographic protocol
+**Context**: Formal verification of Lambda-SNARK-R cryptographic protocol  
+**Channel**: Lean Zulip #mathlib  
+**Awaiting**: Community response on polynomial division API
 
 ---
 
