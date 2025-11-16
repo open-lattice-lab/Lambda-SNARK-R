@@ -144,9 +144,17 @@ theorem lagrange_interpolate_eval {F : Type*} [Field F]
   unfold lagrange_interpolate
   simp only [eval_finset_sum, eval_mul, eval_C, lagrange_basis_property m hprim]
   -- Goal: ∑ j, evals j * (if j = i then 1 else 0) = evals i
-  -- Strategy: rewrite evals j * ite to ite (evals j) 0, then apply Finset.sum_ite_eq
-  sorry  -- TODO: simp [mul_ite, mul_one, mul_zero, Finset.sum_ite_eq, Finset.mem_univ]
-         -- Technical issue: simp doesn't apply sum_ite_eq with correct argument order
+  -- Transform to: ∑ j, (if j = i then evals j else 0) = evals i
+  simp only [mul_ite, mul_one, mul_zero]
+  -- Rewrite j = i to i = j for Finset.sum_ite_eq
+  have h_eq : ∑ j : Fin m, (if j = i then evals j else 0) = 
+              ∑ j : Fin m, (if i = j then evals j else 0) := by
+    congr 1; ext j
+    by_cases h : j = i
+    · simp only [h, eq_comm, ↓reduceIte]
+    · simp only [h, Ne.symm h, ↓reduceIte]
+  rw [h_eq]
+  simp only [Finset.sum_ite_eq, Finset.mem_univ, ↓reduceIte]
 
 -- ============================================================================
 -- Polynomial Division

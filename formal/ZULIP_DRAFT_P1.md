@@ -74,3 +74,4 @@ Any guidance on the right API usage pattern here would be appreciated!
 Full proof attempt: https://github.com/SafeAGI-lab/Lambda-SNARK-R/blob/main/formal/LambdaSNARK/Polynomial.lean#L65-L72
 
 Verification plan: https://github.com/SafeAGI-lab/Lambda-SNARK-R/blob/main/formal/VERIFICATION_PLAN.md
+<!--  -->
