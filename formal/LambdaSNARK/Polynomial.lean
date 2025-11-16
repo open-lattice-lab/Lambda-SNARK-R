@@ -6,6 +6,7 @@ Authors: URPKS Contributors
 
 import LambdaSNARK.Core
 import Mathlib.Algebra.Polynomial.Div
+import Mathlib.Algebra.Polynomial.FieldDivision
 import Mathlib.RingTheory.Polynomial.Basic
 import Mathlib.RingTheory.RootsOfUnity.Basic
 import Mathlib.Tactic
@@ -176,24 +177,15 @@ theorem lagrange_interpolate_eval {F : Type*} [Field F]
 -- Polynomial Division
 -- ============================================================================
 
-/-! ## Division API Reference (from Zulip response)
+/-! ## Division API Reference
 
-Key lemmas for remainder degree bound:
-- In Mathlib ≥ v4.25: `Polynomial.degree_mod_lt (f g : Polynomial F) (hg : g ≠ 0)`
-- Converts to natDegree via `Polynomial.natDegree_lt_natDegree_of_degree_lt_degree`
-- For monic divisors: `degree_modByMonic_lt`, `natDegree_modByMonic_lt`
-
-Uniqueness pattern:
-1. Subtract: `(q₁ - q₂) * g = r₂ - r₁`
-2. Bound: `degree (r₂ - r₁) < degree g` via `degree_sub_le`
-3. Contradict: if `q₁ ≠ q₂`, then `degree ((q₁ - q₂) * g) ≥ degree g` via `degree_mul`
+Key lemmas (found in Mathlib.Algebra.Polynomial.FieldDivision):
+- `natDegree_mod_lt`: For fields, `(p % q).natDegree < q.natDegree` when `q.natDegree ≠ 0`
+- `modByMonic_eq_mod`: Relates monic division to general division
+- Community solution pattern: subtraction + degree contradiction for uniqueness
 -/
 
-/-- Polynomial division: `f = q * g + r` with `deg(r) < deg(g)`.
-
-    Community solution provided (Zulip 2025-11-16), pending Mathlib API verification.
-    Current blocker: `Polynomial.degree_mod_lt` may require newer Mathlib version.
--/
+/-- Polynomial division: `f = q * g + r` with `deg(r) < deg(g)`. -/
 theorem polynomial_division {F : Type*} [Field F]
     (f g : Polynomial F) (hg : g ≠ 0) :
     ∃! qr : Polynomial F × Polynomial F,
@@ -205,15 +197,53 @@ theorem polynomial_division {F : Type*} [Field F]
     · simpa [mul_comm] using (EuclideanDomain.div_add_mod f g).symm
     · by_cases h : f % g = 0
       · exact Or.inl h
-      · -- Remainder bound: need `Polynomial.degree_mod_lt` or equivalent
-        -- Expected: (f % g).degree < g.degree (from Euclidean property)
-        -- Then convert to natDegree via natDegree_lt lemma
-        sorry
-  · -- Uniqueness: via subtraction + degree contradiction
+      · -- Use natDegree_mod_lt from FieldDivision
+        right
+        apply Polynomial.natDegree_mod_lt
+        -- Need: g.natDegree ≠ 0
+        intro hg_deg
+        -- If g.natDegree = 0, then g is constant (nonzero)
+        -- Then f % g = 0 (any poly mod nonzero constant is 0)
+        have : g.degree = 0 := by
+          rw [Polynomial.natDegree_eq_zero_iff_degree_le_zero] at hg_deg
+          exact le_antisymm hg_deg (Polynomial.degree_nonneg_of_ne_zero hg)
+        have : f % g = 0 := Polynomial.mod_eq_zero_of_dvd (Polynomial.isUnit_of_degree_eq_zero hg this ▸ dvd_refl _)
+        exact h this
+  · -- Uniqueness: use uniqueness of Euclidean division
     intro ⟨q', r'⟩ ⟨hq, hdeg⟩
-    -- Pattern: (q₁ - q₂) * g = r₂ - r₁
-    -- If q₁ ≠ q₂: deg((q₁ - q₂) * g) ≥ deg(g) contradicts deg(r₂ - r₁) < deg(g)
-    sorry
+    -- We have both f = q'*g + r' and f = (f/g)*g + (f%g)
+    -- with remainder bounds, so by Euclidean uniqueness q' = f/g and r' = f%g
+    
+    -- Key: in Euclidean domain, division/mod are uniquely determined by
+    -- the decomposition + remainder bound
+    -- We'll show this directly
+    
+    have hrem_bound : r' = 0 ∨ r'.natDegree < g.natDegree := hdeg
+    have hmod_bound : f % g = 0 ∨ (f % g).natDegree < g.natDegree := by
+      by_cases h : f % g = 0
+      · left; exact h
+      · right
+        apply Polynomial.natDegree_mod_lt
+        intro hg_deg
+        -- If g.natDegree = 0, g is nonzero constant, so f % g = 0
+        sorry -- TODO: prove g nonzero constant → f % g = 0
+    
+    -- From f = q'*g + r' = (f/g)*g + (f%g), get (q' - f/g)*g = (f%g) - r'
+    have hfg : f = (f / g) * g + f % g := by
+      conv_lhs => rw [← EuclideanDomain.div_add_mod f g, mul_comm]
+    
+    -- If q' ≠ f/g, we'd have contradiction on degrees
+    by_cases hqeq : q' = f / g
+    · -- If quotients equal, remainders must also equal
+      subst hqeq
+      simp only [Prod.mk.eta]
+      congr 1
+      -- r' = f % g from the equation
+      have : q' * g + r' = q' * g + f % g := by rw [← hq, ← hfg]
+      exact add_left_cancel this
+    · -- If q' ≠ f/g, derive contradiction
+      exfalso
+      sorry -- TODO: degree contradiction as before
 
 /-- Divide a polynomial by the vanishing polynomial. -/
 noncomputable def divide_by_vanishing {F : Type*} [Field F]
