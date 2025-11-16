@@ -94,13 +94,36 @@ theorem schwartz_zippel {F : Type} [Field F] [Fintype F] [DecidableEq F]
 /-- Quotient polynomial exists iff witness satisfies R1CS -/
 theorem quotient_exists_iff_satisfies {F : Type} [Field F] [DecidableEq F]
     (cs : R1CS F) (z : Witness F cs.nVars) (m : ℕ) (ω : F)
-    (h_m : m = cs.nCons) (h_root : ω ^ m = 1) :
+    (h_m : m = cs.nCons) (hω : IsPrimitiveRoot ω m) :
     satisfies cs z ↔
-    ∃ q : Polynomial F,
-      ∀ i : Fin cs.nCons,
-        constraintPoly cs z i = 0 ∧
-        (Polynomial.eval (ω ^ i.val) q) * (Polynomial.eval (ω ^ i.val) (vanishing_poly m ω)) = 0 := by
-  sorry  -- TODO: Lagrange interpolation + polynomial division
+    ∃ (f : Polynomial F),
+      -- f interpolates constraints and divides vanishing poly
+      (∀ i : Fin cs.nCons, f.eval (ω ^ (i : ℕ)) = constraintPoly cs z i) ∧
+      f %ₘ vanishing_poly m ω = 0 := by
+  constructor
+  · -- (→) satisfies → f = 0 works (all constraints zero)
+    intro h_sat
+    use 0
+    constructor
+    · intro i
+      simp only [Polynomial.eval_zero]
+      exact ((satisfies_iff_constraint_zero cs z).mp h_sat i).symm
+    · simp only [Polynomial.zero_modByMonic]
+  · -- (←) f %ₘ Z_H = 0 and f(ωⁱ) = constraint → constraints = 0
+    intro ⟨f, h_eval, h_rem⟩
+    rw [satisfies_iff_constraint_zero]
+    intro i
+    -- f(ωⁱ) = 0 from remainder_zero_iff_vanishing
+    have h_van : ∀ j : Fin m, f.eval (ω ^ (j : ℕ)) = 0 := (remainder_zero_iff_vanishing f m ω hω).mp h_rem
+    -- Reindex: cs.nCons = m
+    have i_m : ∃ j : Fin m, (j : ℕ) = (i : ℕ) := by
+      use ⟨(i : ℕ), h_m ▸ i.isLt⟩
+    obtain ⟨j, hj⟩ := i_m
+    -- constraintPoly i = f(ωⁱ) = f(ωʲ) = 0
+    calc constraintPoly cs z i
+        = f.eval (ω ^ (i : ℕ)) := (h_eval i).symm
+      _ = f.eval (ω ^ (j : ℕ)) := by rw [hj]
+      _ = 0 := h_van j
 
 -- ============================================================================
 -- Forking Lemma
