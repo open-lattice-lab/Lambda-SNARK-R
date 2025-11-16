@@ -204,7 +204,7 @@ noncomputable def witness_to_poly {F : Type} [Field F] [DecidableEq (Fin 1)] {n 
     if h : i.val < n then w ⟨i.val, h⟩ else 0)
 
 /-- Constraint polynomial evaluation at domain points -/
-theorem constraint_poly_eval {F : Type} [Field F] [DecidableEq F] [Zero F]
+theorem constraint_poly_eval {F : Type} [Field F] [DecidableEq F]
     (cs : R1CS F) (z : Witness F cs.nVars) (i : Fin cs.nCons)
     (m : ℕ) (ω : F) (h_m : m = cs.nCons) (h_root : ω ^ m = 1) :
     -- Az(ωⁱ) * Bz(ωⁱ) - Cz(ωⁱ) = constraint evaluation at i-th point
@@ -242,7 +242,7 @@ theorem quotient_uniqueness {F : Type} [Field F]
     sorry  -- TODO: Show vanishing_poly m ω ≠ 0 and apply mul_right_cancel
 
 /-- Degree bound for quotient polynomial -/
-theorem quotient_degree_bound {F : Type} [Field F] [DecidableEq F] [Zero F]
+theorem quotient_degree_bound {F : Type} [Field F] [DecidableEq F]
     (cs : R1CS F) (z : Witness F cs.nVars)
     (m : ℕ) (ω : F) (q : Polynomial F)
     (h_sat : satisfies cs z)

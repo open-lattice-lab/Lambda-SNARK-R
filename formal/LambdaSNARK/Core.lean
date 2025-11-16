@@ -103,7 +103,7 @@ def extractPublic {F : Type} {n l : ℕ} (h : l ≤ n) (w : Witness F n) : Publi
   fun i => w ⟨i.val, Nat.lt_of_lt_of_le i.isLt h⟩
 
 /-- Satisfaction predicate for R1CS -/
-def satisfies {F : Type} [CommRing F] [DecidableEq F] [Zero F] (cs : R1CS F) (z : Witness F cs.nVars) : Prop :=
+def satisfies {F : Type} [CommRing F] [DecidableEq F] (cs : R1CS F) (z : Witness F cs.nVars) : Prop :=
   ∀ i : Fin cs.nCons,
     let iA := Fin.cast cs.h_dim_A.1.symm i
     let iB := Fin.cast cs.h_dim_B.1.symm i
@@ -117,7 +117,7 @@ def hadamard {F : Type} [CommRing F] {n : ℕ} (u v : Fin n → F) : Fin n → F
   fun i => u i * v i
 
 /-- Constraint evaluation polynomial: Az(i) * Bz(i) - Cz(i) -/
-def constraintPoly {F : Type} [CommRing F] [DecidableEq F] [Zero F] (cs : R1CS F) (z : Witness F cs.nVars)
+def constraintPoly {F : Type} [CommRing F] [DecidableEq F] (cs : R1CS F) (z : Witness F cs.nVars)
     : Fin cs.nCons → F :=
   fun i =>
     let iA := Fin.cast cs.h_dim_A.1.symm i
@@ -128,7 +128,7 @@ def constraintPoly {F : Type} [CommRing F] [DecidableEq F] [Zero F] (cs : R1CS F
     (∑ j : Fin cs.nVars, cs.C.toDense iC (Fin.cast cs.h_dim_C.2.symm j) * z j)
 
 /-- Satisfaction is equivalent to constraint poly being zero -/
-theorem satisfies_iff_constraint_zero {F : Type} [CommRing F] [DecidableEq F] [Zero F]
+theorem satisfies_iff_constraint_zero {F : Type} [CommRing F] [DecidableEq F]
     (cs : R1CS F) (z : Witness F cs.nVars) :
     satisfies cs z ↔ ∀ i, constraintPoly cs z i = 0 := by
   sorry  -- TODO: Proof requires sub_eq_zero with cast lemmas

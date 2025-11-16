@@ -43,7 +43,7 @@ and matches public input x, then the honest prover's proof is accepted by the ve
 2. Show quotient polynomial exists (by satisfaction)
 3. Show all verifier checks pass (commitment correctness + opening correctness)
 -/
-theorem completeness {F : Type} [Field F] [Fintype F] [DecidableEq F] [Zero F]
+theorem completeness {F : Type} [Field F] [Fintype F] [DecidableEq F]
     (VC : VectorCommitment F) (cs : R1CS F) (secParam : ℕ)
     (P : HonestProver F VC)
     :
@@ -56,7 +56,7 @@ theorem completeness {F : Type} [Field F] [Fintype F] [DecidableEq F] [Zero F]
   sorry  -- TODO: Follow honest prover construction step-by-step
 
 /-- Completeness error is zero (perfect completeness) -/
-theorem perfect_completeness {F : Type} [Field F] [Fintype F] [DecidableEq F] [Zero F]
+theorem perfect_completeness {F : Type} [Field F] [Fintype F] [DecidableEq F]
     (VC : VectorCommitment F) (cs : R1CS F) (secParam : ℕ)
     (P : HonestProver F VC) :
     ∀ (w : Witness F cs.nVars) (x : PublicInput F cs.nPub) (r : ℕ),

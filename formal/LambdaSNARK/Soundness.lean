@@ -85,7 +85,7 @@ theorem schwartz_zippel {F : Type} [Field F] [Fintype F] [DecidableEq F]
 -- ============================================================================
 
 /-- Quotient polynomial exists iff witness satisfies R1CS -/
-theorem quotient_exists_iff_satisfies {F : Type} [Field F] [DecidableEq F] [Zero F]
+theorem quotient_exists_iff_satisfies {F : Type} [Field F] [DecidableEq F]
     (cs : R1CS F) (z : Witness F cs.nVars) (m : ℕ) (ω : F)
     (h_m : m = cs.nCons) (h_root : ω ^ m = 1) :
     satisfies cs z ↔
@@ -136,7 +136,7 @@ such that E extracts a witness w satisfying:
 3. Compute witness from quotient polynomial difference
 4. Verify extracted witness satisfies R1CS via Schwartz-Zippel
 -/
-theorem knowledge_soundness {F : Type} [Field F] [Fintype F] [DecidableEq F] [Zero F]
+theorem knowledge_soundness {F : Type} [Field F] [Fintype F] [DecidableEq F]
     (VC : VectorCommitment F) (cs : R1CS F) (secParam : ℕ)
     (A : Adversary F VC) (ε : ℕ → ℝ)
     (h_non_negl : NonNegligible ε)
