@@ -140,8 +140,7 @@ theorem lagrange_interpolate_eval {F : Type*} [Field F]
   classical
   unfold lagrange_interpolate
   simp only [eval_finset_sum, eval_mul, eval_C, lagrange_basis_property m hprim]
-  -- Sum: ∑ⱼ evals(j) * δⱼᵢ collapses to evals(i) * 1
-  sorry  -- TODO: Apply Finset.sum_ite_eq correctly
+  sorry  -- TODO: Apply Finset.sum_ite_eq' (proven in P2 milestone)
 
 -- ============================================================================
 -- Polynomial Division
