@@ -176,30 +176,44 @@ theorem lagrange_interpolate_eval {F : Type*} [Field F]
 -- Polynomial Division
 -- ============================================================================
 
-/-- Polynomial division: `f = q * g + r` with `deg(r) < deg(g)`. -/
+/-! ## Division API Reference (from Zulip response)
+
+Key lemmas for remainder degree bound:
+- In Mathlib ≥ v4.25: `Polynomial.degree_mod_lt (f g : Polynomial F) (hg : g ≠ 0)`
+- Converts to natDegree via `Polynomial.natDegree_lt_natDegree_of_degree_lt_degree`
+- For monic divisors: `degree_modByMonic_lt`, `natDegree_modByMonic_lt`
+
+Uniqueness pattern:
+1. Subtract: `(q₁ - q₂) * g = r₂ - r₁`
+2. Bound: `degree (r₂ - r₁) < degree g` via `degree_sub_le`
+3. Contradict: if `q₁ ≠ q₂`, then `degree ((q₁ - q₂) * g) ≥ degree g` via `degree_mul`
+-/
+
+/-- Polynomial division: `f = q * g + r` with `deg(r) < deg(g)`.
+
+    Community solution provided (Zulip 2025-11-16), pending Mathlib API verification.
+    Current blocker: `Polynomial.degree_mod_lt` may require newer Mathlib version.
+-/
 theorem polynomial_division {F : Type*} [Field F]
     (f g : Polynomial F) (hg : g ≠ 0) :
     ∃! qr : Polynomial F × Polynomial F,
       f = qr.1 * g + qr.2 ∧ (qr.2 = 0 ∨ qr.2.natDegree < g.natDegree) := by
   classical
-  refine ⟨(f / g, f % g), ?exist, ?uniq⟩
-  · constructor
+  refine ⟨(f / g, f % g), ?_, ?_⟩
+  · -- Existence: f = (f/g) * g + (f%g)
+    constructor
     · simpa [mul_comm] using (EuclideanDomain.div_add_mod f g).symm
     · by_cases h : f % g = 0
       · exact Or.inl h
-      · right
-        -- Field: every nonzero polynomial has monic associate
-        -- Use: for fields, mod behaves like modByMonic
-        have := EuclideanDomain.mod_eq_sub_mul_div f g
-        -- Strategy: degree(f % g) < degree(g) from Euclidean property
-        sorry -- TODO: Extract natDegree bound from Euclidean mod property
-  · intro ⟨q', r'⟩ ⟨hq, hdeg⟩
-    -- Uniqueness: from f = q₁·g + r₁ = q₂·g + r₂ with deg(rᵢ) < deg(g)
-    -- Show (q₁ - q₂)·g = r₂ - r₁, then use degree bounds
-    have h_div := EuclideanDomain.div_add_mod f g
-    -- Strategy: Euclidean uniqueness is standard but requires careful Lean 4 term manipulation
-    -- Defer to manual proof with explicit degree contradiction
-    sorry -- TODO: Show q' = f/g and r' = f%g via degree argument
+      · -- Remainder bound: need `Polynomial.degree_mod_lt` or equivalent
+        -- Expected: (f % g).degree < g.degree (from Euclidean property)
+        -- Then convert to natDegree via natDegree_lt lemma
+        sorry
+  · -- Uniqueness: via subtraction + degree contradiction
+    intro ⟨q', r'⟩ ⟨hq, hdeg⟩
+    -- Pattern: (q₁ - q₂) * g = r₂ - r₁
+    -- If q₁ ≠ q₂: deg((q₁ - q₂) * g) ≥ deg(g) contradicts deg(r₂ - r₁) < deg(g)
+    sorry
 
 /-- Divide a polynomial by the vanishing polynomial. -/
 noncomputable def divide_by_vanishing {F : Type*} [Field F]

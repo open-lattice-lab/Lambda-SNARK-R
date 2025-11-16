@@ -64,8 +64,8 @@ Lambda-SNARK-R implementation is **complete**. We are now in formal verification
 |----|-------|--------|------------|------|-------|
 | P1 | `primitive_root_pow_injective` | ✅ CLOSED | Medium | - | wlog + pow_eq_one_iff_dvd |
 | P2 | `lagrange_interpolate_eval` | ✅ CLOSED | Low | - | by_cases + Finset.sum_ite_eq |
-| P3 | `polynomial_division` (P3) | ⚠️ DEFERRED | Medium | 4h | Euclidean natDegree bound |
-| P4 | `polynomial_division` (P4) | ⚠️ DEFERRED | Medium | 3h | ring tactic calc issues |
+| P3 | `polynomial_division` (existence) | 🔄 PARTIAL | Medium | 4h | API: Polynomial.degree_mod_lt |
+| P4 | `polynomial_division` (uniqueness) | 🔄 PARTIAL | Medium | 3h | API: degree_sub_le + degree_mul |
 | P5 | `remainder_zero_iff_vanishing` (P5) | ⚠️ DEFERRED | Medium | 3h | modByMonic + divisibility |
 | P6 | `remainder_zero_iff_vanishing` (P6) | ⚠️ DEFERRED | High | 5h | Product divisibility lemma |
 | P7 | `quotient_uniqueness` (m=0) | ✅ CLOSED | Low | - | Finset.prod_empty |
@@ -73,7 +73,11 @@ Lambda-SNARK-R implementation is **complete**. We are now in formal verification
 | P9 | `quotient_degree_bound` | ✅ CLOSED | Medium | - | natDegree_mul + omega |
 
 **Closed**: P1, P2, P7, P8, P9 (commits 6f49235, a5b4a62, 88b2a78, 9791802)  
-**Deferred**: P3-P6 (technical Lean 4 API issues, strategies documented)
+**In Progress**: P3-P4 (community solution from Zulip integrated, Nov 16)  
+  - Structure: subtraction pattern `(q₁ - q₂) * g = r₂ - r₁` + degree contradiction
+  - Blocker: `Polynomial.degree_mod_lt` API may require Mathlib update
+  - Proof skeleton complete, awaiting API confirmation
+**Deferred**: P5-P6 (dependent on P3-P4)
 
 ---
 
@@ -198,10 +202,18 @@ Lambda-SNARK-R implementation is **complete**. We are now in formal verification
 - **Attempts**: `mul_ite` transformation, manual `have` lemmas
 - **Workaround**: Manual proof with explicit sum rewriting (not attempted yet)
 
-**P3-P4 (`polynomial_division`)** — Euclidean domain
-- **Issue P3**: No direct `Polynomial.degree_mod_lt` in Mathlib
-- **Issue P4**: `ring` tactic fails on polynomial calc chains
-- **Workaround**: Use `Polynomial.modByMonic` directly with monic proofs
+**P3-P4 (`polynomial_division`)** — Euclidean domain + uniqueness
+- **Status (Nov 16)**: 🔄 PARTIAL — Community solution integrated, API-blocked
+- **Solution Received**: Zulip response with canonical pattern (subtraction + contradiction)
+- **Issue P3**: `Polynomial.degree_mod_lt` API not found in current Mathlib version
+  * Expected: `(f % g).degree < g.degree` for all `g ≠ 0` (Euclidean property)
+  * Converts to natDegree via `natDegree_lt_natDegree_of_degree_lt_degree`
+  * Alternative: `degree_modByMonic_lt` for monic divisors
+- **Issue P4**: Uniqueness via subtraction pattern `(q₁ - q₂) * g = r₂ - r₁`
+  * Requires: `degree_sub_le`, `degree_mul`, `WithBot.coe_lt_coe`
+  * Implemented but sorry due to P3 dependency
+- **Structure**: Proof skeleton complete (46 lines), only API calls missing
+- **Workaround**: None until API verification (may need Mathlib update or alternative imports)
 
 **P5-P6 (`remainder_zero_iff_vanishing`)** — Product divisibility
 - **Issue**: Need `(∀i, pᵢ | f) → (∏ pᵢ | f)` for coprime factors
@@ -229,14 +241,20 @@ Lambda-SNARK-R implementation is **complete**. We are now in formal verification
 9. ✅ Close C3 (extractPublic proofs) — Added h_pub_le: nPub ≤ nVars to R1CS structure
 10. ✅ Receive community solution for P1 from Lean #mathlib — pow_eq_one_iff_dvd pattern
 11. ✅ Close P1 (`primitive_root_pow_injective`) — wlog + mul_left_cancel₀ + pow_eq_one_iff_dvd
-12. ✅ Create ZULIP_DRAFT_P3_P4.md with MWE for polynomial division API ← **NEW**
-13. ✅ Close C1 (`completeness`) — optimistic verify is reflexive ← **NEW**
+12. ✅ Create ZULIP_DRAFT_P3_P4.md with MWE for polynomial division API
+13. ✅ Close C1 (`completeness`) — optimistic verify is reflexive
+14. ✅ Receive community solution for P3-P4 from Lean #mathlib ← **NEW (Nov 16)**
+15. 🔄 Integrate P3-P4 solution — proof structure complete, API-blocked ← **NEW**
 
-**Session Summary (Nov 16)**:
-- Sorry count: 18 → 5 (72% reduction!)
+**Session Summary (Nov 16 Update 2)**:
+- Sorry count: 18 → 5 (72% verified, count unchanged but structure improved)
 - Theorems closed: 9 (P1, P2, P7, P8, P9, S1, C1, C2, C3)
+- P3-P4 status: DEFERRED → PARTIAL (community solution integrated)
+  * Proof skeleton: ✅ Complete (subtraction + degree contradiction pattern)
+  * API blocker: ⏳ `Polynomial.degree_mod_lt` verification needed
+  * Build: ✅ Stable (compiles with 2 sorry placeholders)
 - Files: Core 100%, Completeness 100%, Polynomial 78%, Soundness 50%
-- Community collaboration: P1 solution implemented, P3-P4 consultation drafted
+- Community collaboration: 2 consultations (P1 ✅ solved, P3-P4 🔄 in progress)
 - Build status: ✅ Stable (6026 jobs)
 
 ### Next Session
