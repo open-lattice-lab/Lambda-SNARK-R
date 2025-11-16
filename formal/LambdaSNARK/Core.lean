@@ -131,7 +131,13 @@ def constraintPoly {F : Type} [CommRing F] [DecidableEq F] (cs : R1CS F) (z : Wi
 theorem satisfies_iff_constraint_zero {F : Type} [CommRing F] [DecidableEq F]
     (cs : R1CS F) (z : Witness F cs.nVars) :
     satisfies cs z ↔ ∀ i, constraintPoly cs z i = 0 := by
-  sorry  -- TODO: Proof requires sub_eq_zero with cast lemmas
+  unfold satisfies constraintPoly
+  simp only []
+  constructor
+  · intro h i
+    exact sub_eq_zero.mpr (h i)
+  · intro h i
+    exact sub_eq_zero.mp (h i)
 
 /-- Vector commitment scheme (abstract interface) -/
 structure VectorCommitment (F : Type) [CommRing F] where

@@ -67,9 +67,7 @@ lemma primitive_root_pow_injective {F : Type*} [Field F]
     (i j : Fin m) :
     ω ^ (i : ℕ) = ω ^ (j : ℕ) → i = j := by
   intro h
-  -- Accept as axiom for now: standard fact about primitive roots
-  -- Full proof requires: IsPrimitiveRoot.pow_inj or manual ZMod arithmetic
-  sorry
+  sorry  -- TODO: Use IsPrimitiveRoot.pow_inj
 
 /-- Lagrange basis `Lᵢ(X) = ∏_{j≠i} (X - ω^j) / ∏_{j≠i} (ω^i - ω^j)`. -/
 noncomputable def lagrange_basis {F : Type*} [Field F] (m : ℕ) (ω : F) (i : Fin m) : Polynomial F := by
@@ -143,7 +141,7 @@ theorem lagrange_interpolate_eval {F : Type*} [Field F]
   unfold lagrange_interpolate
   simp only [eval_finset_sum, eval_mul, eval_C, lagrange_basis_property m hprim]
   -- Sum: ∑ⱼ evals(j) * δⱼᵢ collapses to evals(i) * 1
-  sorry  -- TODO: Use Finset.sum_ite_eq or manual rewrite
+  sorry  -- TODO: Apply Finset.sum_ite_eq correctly
 
 -- ============================================================================
 -- Polynomial Division
