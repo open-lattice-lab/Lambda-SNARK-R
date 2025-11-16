@@ -909,17 +909,17 @@ Q3-Q4 2026:     Security audit ($50K-$100K) + external review
 ## 🔄 M8: Soundness Proof (IN PROGRESS — 83%)
 
 **Goal**: Machine-checked proof of knowledge soundness in Lean 4  
-**Status**: 🔄 **83% complete** (S2 quotient_exists ✅ closed, S3-S4 deferred)  
+**Status**: 🔄 **79% complete** (S2 quotient_exists ✅ closed, S3-S4 deferred)  
 **Progress**: 
-- ✅ **Polynomial track (78%)**: P5-P6-P7 remainder_zero_iff_vanishing closed
+- ✅ **Polynomial track (90%)**: P5-P6-P7 remainder_zero_iff_vanishing closed, P3-P4 deferred
 - ✅ **Soundness track (S2)**: quotient_exists_iff_satisfies closed
 - 🟡 **S3-S4 deferred**: forking_lemma + knowledge_soundness (cryptographic proofs, ~50h)
 **ETA**: February-April 2026 (**REVISED**: 8-10 weeks remaining, was 10-14 weeks)  
 **Time**: **140h done** + 320-420h remaining = 460-560h total
 
-> **⚠️ Update (Nov 16, 2025)**: Session achieved **+11% verification** (72% → 83%).  
+> **⚠️ Update (Nov 16, 2025)**: Session achieved **+7% verification** (72% → 79%).  
 > P5-P6-P7 (vanishing polynomial equivalence) and S2 (quotient existence) closed.  
-> Remaining: 2 polynomial edge cases + 2 cryptographic theorems (S3-S4).
+> Remaining: 2 polynomial edge cases (P3-P4 in 1 theorem) + 2 cryptographic theorems (S3-S4).
 
 ### Session Summary (Nov 16, 2025)
 
