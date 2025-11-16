@@ -91,6 +91,7 @@ structure R1CS (F : Type) [CommRing F] where
   h_dim_A : A.nRows = nCons ∧ A.nCols = nVars
   h_dim_B : B.nRows = nCons ∧ B.nCols = nVars
   h_dim_C : C.nRows = nCons ∧ C.nCols = nVars
+  h_pub_le : nPub ≤ nVars            -- Public inputs are prefix of witness
 
 /-- Witness vector (includes public inputs at start) -/
 def Witness (F : Type) (n : ℕ) := Fin n → F

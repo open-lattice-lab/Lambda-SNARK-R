@@ -50,7 +50,7 @@ theorem completeness {F : Type} [Field F] [Fintype F] [DecidableEq F]
     ∀ (w : Witness F cs.nVars) (x : PublicInput F cs.nPub) (r : ℕ),
       -- If witness is valid
       satisfies cs w →
-      extractPublic (by sorry) w = x →
+      extractPublic cs.h_pub_le w = x →
       -- Then proof verifies
       verify VC cs x (P.prove cs w x r) = true := by
   sorry  -- TODO: Follow honest prover construction step-by-step
@@ -61,7 +61,7 @@ theorem perfect_completeness {F : Type} [Field F] [Fintype F] [DecidableEq F]
     (P : HonestProver F VC) :
     ∀ (w : Witness F cs.nVars) (x : PublicInput F cs.nPub) (r : ℕ),
       satisfies cs w →
-      extractPublic (by sorry) w = x →
+      extractPublic cs.h_pub_le w = x →
       -- Probability of acceptance is exactly 1 (no randomness in verification)
       verify VC cs x (P.prove cs w x r) = true := by
   intro w x r h_sat h_pub

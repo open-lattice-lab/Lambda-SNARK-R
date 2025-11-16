@@ -118,7 +118,7 @@ theorem forking_lemma {F : Type} [Field F] [Fintype F] [DecidableEq F]
         -- If adversary produces valid proof with prob ε
         (∃ π, verify VC cs x π = true) →
         -- Then extractor finds witness with prob ≥ ε² - negl(λ)
-        (∃ w, satisfies cs w ∧ extractPublic (by sorry) w = x) := by
+        (∃ w, satisfies cs w ∧ extractPublic cs.h_pub_le w = x) := by
   sorry  -- TODO: Rewinding + challenge-response extraction
 
 -- ============================================================================
@@ -158,7 +158,7 @@ theorem knowledge_soundness {F : Type} [Field F] [Fintype F] [DecidableEq F]
         -- Extractor finds witness
         (∃ w : Witness F cs.nVars,
           satisfies cs w ∧
-          extractPublic (by sorry) w = x) := by
+          extractPublic cs.h_pub_le w = x) := by
   sorry  -- TODO: Combine forking lemma + Schwartz-Zippel + binding property
 
 end LambdaSNARK
