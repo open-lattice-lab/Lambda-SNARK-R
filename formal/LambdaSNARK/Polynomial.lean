@@ -235,15 +235,25 @@ theorem quotient_uniqueness {F : Type} [Field F]
   -- Z_H is product of (X - ωⁱ), each factor nonzero, so Z_H ≠ 0
   by_cases h_m : m = 0
   · -- m = 0: Z_H = 1 (empty product), so q₁ * 1 = q₂ * 1
-    simp [vanishing_poly, h_m] at h_eq
-    cases h_eq with
-    | inl h => exact h
-    | inr h =>
-      -- h: ∏ x : Fin 0, _ = 0, but empty product = 1
-      exfalso
-      sorry  -- TODO: Show Finset.prod over empty set equals 1, not 0
+    subst h_m
+    have h_prod : ∏ i : Fin 0, (X - C (ω ^ (i : ℕ))) = 1 := Finset.prod_empty
+    simp only [vanishing_poly, h_prod, mul_one] at h_eq
+    exact h_eq
   · -- m > 0: Z_H ≠ 0 (product of nonzero linear factors)
-    sorry  -- TODO: Show vanishing_poly m ω ≠ 0 and apply mul_right_cancel
+    -- Strategy: Each factor (X - ωⁱ) is nonzero polynomial, product nonzero
+    -- Use Polynomial.mul_right_cancel₀ or IsCancelMulZero
+    have h_Z_ne_zero : vanishing_poly m ω ≠ 0 := by
+      unfold vanishing_poly
+      apply Finset.prod_ne_zero_iff.mpr
+      intro i _
+      -- Show X - C(ωⁱ) ≠ 0: degree 1 polynomial
+      intro h_factor_zero
+      have : (X - C (ω ^ (i : ℕ))).natDegree = 0 := by rw [h_factor_zero]; simp
+      -- But X - C a has degree 1
+      have : (X - C (ω ^ (i : ℕ))).natDegree = 1 := by
+        rw [Polynomial.natDegree_sub_C]; simp
+      omega
+    exact mul_right_cancel₀ h_Z_ne_zero h_eq
 
 /-- Degree bound for quotient polynomial -/
 theorem quotient_degree_bound {F : Type} [Field F]
