@@ -14,11 +14,11 @@ Lambda-SNARK-R implementation is **complete**. We are now in formal verification
 
 **Verification Progress**: 
 - ✅ **Core.lean**: 100% verified (0 sorry)
-- 🔧 **Polynomial.lean**: 56% verified (4 sorry remaining) ← **Updated Nov 16 (P2 closed)**
+- 🔧 **Polynomial.lean**: 67% verified (2 sorry remaining) ← **Updated Nov 16 (P1, P2 closed)**
 - 🔐 **Soundness.lean**: 50% verified (3 sorry remaining) ← **Updated Nov 16 (S1 closed)**
 - 🔬 **Completeness.lean**: 67% verified (1 sorry remaining) ← **Updated Nov 16 (C3 closed)**
 
-**Total**: 8 sorry statements to close for full formal verification ← **Updated Nov 16 (18→8, 56% done!)**
+**Total**: 6 sorry statements to close for full formal verification ← **Updated Nov 16 (18→6, 67% done!)**
 
 ---
 
@@ -62,7 +62,7 @@ Lambda-SNARK-R implementation is **complete**. We are now in formal verification
 
 | ID | Lemma | Status | Complexity | Time | Notes |
 |----|-------|--------|------------|------|-------|
-| P1 | `primitive_root_pow_injective` | ⚠️ DEFERRED | Medium | 3h | IsPrimitiveRoot API issues |
+| P1 | `primitive_root_pow_injective` | ✅ CLOSED | Medium | - | wlog + pow_eq_one_iff_dvd |
 | P2 | `lagrange_interpolate_eval` | ✅ CLOSED | Low | - | by_cases + Finset.sum_ite_eq |
 | P3 | `polynomial_division` (P3) | ⚠️ DEFERRED | Medium | 4h | Euclidean natDegree bound |
 | P4 | `polynomial_division` (P4) | ⚠️ DEFERRED | Medium | 3h | ring tactic calc issues |
@@ -72,8 +72,8 @@ Lambda-SNARK-R implementation is **complete**. We are now in formal verification
 | P8 | `quotient_uniqueness` (m>0) | ✅ CLOSED | Low | - | mul_right_cancel₀ |
 | P9 | `quotient_degree_bound` | ✅ CLOSED | Medium | - | natDegree_mul + omega |
 
-**Closed**: P2, P7, P8, P9 (commits a5b4a62, 88b2a78, 9791802)  
-**Deferred**: P1, P3-P6 (technical Lean 4 API issues, strategies documented)
+**Closed**: P1, P2, P7, P8, P9 (commits 6f49235, a5b4a62, 88b2a78, 9791802)  
+**Deferred**: P3-P6 (technical Lean 4 API issues, strategies documented)
 
 ---
 
@@ -225,18 +225,19 @@ Lambda-SNARK-R implementation is **complete**. We are now in formal verification
 5. ✅ Update VERIFICATION_PLAN.md with progress
 6. ✅ Close S1 (`schwartz_zippel`) — Polynomial.card_roots' + Multiset.toFinset_card_le
 7. ✅ Create ZULIP_DRAFT_P1.md with MWE for IsPrimitiveRoot.ne_zero issue
-8. ✅ Close P2 (`lagrange_interpolate_eval`) — by_cases + simp [eq_comm] + Finset.sum_ite_eq ← **NEW**
-9. ✅ Close C3 (extractPublic proofs) — Added h_pub_le: nPub ≤ nVars to R1CS structure ← **NEW**
+8. ✅ Close P2 (`lagrange_interpolate_eval`) — by_cases + simp [eq_comm] + Finset.sum_ite_eq
+9. ✅ Close C3 (extractPublic proofs) — Added h_pub_le: nPub ≤ nVars to R1CS structure
+10. ✅ Receive community solution for P1 from Lean #mathlib — pow_eq_one_iff_dvd pattern ← **NEW**
+11. ✅ Close P1 (`primitive_root_pow_injective`) — wlog + mul_left_cancel₀ + pow_eq_one_iff_dvd ← **NEW**
 
 **Session Summary (Nov 16)**:
-- Sorry count: 18 → 8 (56% reduction!)
-- Theorems closed: 7 (P2, P7, P8, P9, S1, C2, C3)
+- Sorry count: 18 → 6 (67% reduction!)
+- Theorems closed: 8 (P1, P2, P7, P8, P9, S1, C2, C3)
 - Structural improvements: R1CS now enforces h_pub_le invariant
+- Community collaboration: P1 solution documented in ZULIP_DRAFT_P1.md
 - Build status: ✅ Stable (6026 jobs)
 
 ### Next Session
-- Post ZULIP_DRAFT_P1.md to Lean Zulip (#mathlib channel)
-- Consult Zulip for P5-P6 (product divisibility patterns)
 - Attempt P3-P4 with explicit `modByMonic` and monic proofs
 - Consider C1 (completeness) — honest prover construction
 - Strategic decision: temporary axiomatization if P1, P3-P6 remain blocked >1 week
