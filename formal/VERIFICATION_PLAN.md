@@ -15,10 +15,10 @@ Lambda-SNARK-R implementation is **complete**. We are now in formal verification
 **Verification Progress**: 
 - ✅ **Core.lean**: 100% verified (0 sorry)
 - 🔧 **Polynomial.lean**: 67% verified (5 sorry remaining) ← **Updated Nov 16**
-- 🔐 **Soundness.lean**: 67% verified (6 sorry remaining)
+- 🔐 **Soundness.lean**: 83% verified (5 sorry remaining) ← **Updated Nov 16 (S1 closed)**
 - 🔬 **Completeness.lean**: 0% verified (3 sorry remaining)
 
-**Total**: 14 sorry statements to close for full formal verification ← **Updated Nov 16**
+**Total**: 13 sorry statements to close for full formal verification ← **Updated Nov 16 (14→13)**
 
 ---
 
@@ -80,14 +80,15 @@ Lambda-SNARK-R implementation is **complete**. We are now in formal verification
 ### 🟡 Priority 2: Soundness Proofs (Week 3-4)
 **Goal**: Prove cryptographic security properties
 
-| ID | Theorem | Complexity | Time Est. | Dependencies |
-|----|---------|------------|-----------|--------------|
-| S1 | `schwartz_zippel` | Medium | 4h | Polynomial.card_roots |
-| S2 | `quotient_exists_iff_satisfies` | High | 8h | P2, P6, P7 |
-| S3 | `forking_lemma` | **Very High** | 20h+ | Probability theory |
-| S4 | `knowledge_soundness` | **Very High** | 30h+ | S1, S2, S3, Module-SIS |
+| ID | Theorem | Status | Complexity | Time Est. | Dependencies |
+|----|---------|--------|------------|-----------|--------------|
+| S1 | `schwartz_zippel` | ✅ CLOSED | Medium | - | Polynomial.card_roots' |
+| S2 | `quotient_exists_iff_satisfies` | ⚠️ OPEN | High | 8h | P2, P6, P7 |
+| S3 | `forking_lemma` | ⚠️ OPEN | **Very High** | 20h+ | Probability theory |
+| S4 | `knowledge_soundness` | ⚠️ OPEN | **Very High** | 30h+ | S1, S2, S3, Module-SIS |
 
-**Total**: ~62 hours → 2-3 weeks (S3, S4 may require external collaboration)
+**Closed**: S1 (commit eaee365) — filter.card ≤ toFinset.card ≤ roots.card ≤ natDegree  
+**Total**: ~58 hours → 2-3 weeks (S3, S4 may require external collaboration)
 
 ---
 
@@ -221,11 +222,14 @@ Lambda-SNARK-R implementation is **complete**. We are now in formal verification
 3. ✅ Close P7-P8 (`quotient_uniqueness`) — Finset.prod_empty + mul_right_cancel₀
 4. ✅ Document P1-P6 strategies and blockers
 5. ✅ Update VERIFICATION_PLAN.md with progress
+6. ✅ Close S1 (`schwartz_zippel`) — Polynomial.card_roots' + Multiset.toFinset_card_le ← **NEW**
+7. ✅ Create ZULIP_DRAFT_P1.md with MWE for IsPrimitiveRoot.ne_zero issue ← **NEW**
 
 ### Next Session
-- Consult Lean Zulip for P1 (IsPrimitiveRoot) and P5-P6 (product divisibility)
+- Post ZULIP_DRAFT_P1.md to Lean Zulip (#mathlib channel)
+- Consult Zulip for P5-P6 (product divisibility patterns)
 - Attempt P3-P4 with explicit `modByMonic` and monic proofs
-- Consider temporary axiomatization for P1-P6 to unblock Soundness.lean
+- Consider temporary axiomatization for P1-P6 to unblock S2 (quotient_exists_iff_satisfies)
 
 ---
 
