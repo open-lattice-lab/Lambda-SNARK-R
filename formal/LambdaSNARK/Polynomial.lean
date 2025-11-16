@@ -293,7 +293,7 @@ theorem remainder_zero_iff_vanishing {F : Type*} [Field F]
 /-- Construct polynomial from witness vector via Lagrange interpolation -/
 noncomputable def witness_to_poly {F : Type} [Field F] [DecidableEq (Fin 1)] {n : ℕ}
     (w : Witness F n) (m : ℕ) (ω : F)
-    (h_root : ω ^ m = 1) (h_size : m ≤ n) : Polynomial F :=
+    (_h_root : ω ^ m = 1) (_h_size : m ≤ n) : Polynomial F :=
   -- Interpolate witness values over evaluation domain
   -- For each point i in [0,m), take witness value at index i
   lagrange_interpolate m ω (fun i =>
@@ -301,8 +301,8 @@ noncomputable def witness_to_poly {F : Type} [Field F] [DecidableEq (Fin 1)] {n 
 
 /-- Constraint polynomial evaluation at domain points -/
 theorem constraint_poly_eval {F : Type} [Field F] [DecidableEq F]
-    (cs : R1CS F) (z : Witness F cs.nVars) (i : Fin cs.nCons)
-    (m : ℕ) (ω : F) (h_m : m = cs.nCons) (h_root : ω ^ m = 1) :
+    (_cs : R1CS F) (_z : Witness F _cs.nVars) (_i : Fin _cs.nCons)
+    (_m : ℕ) (_ω : F) (_h_m : _m = _cs.nCons) (_h_root : _ω ^ _m = 1) :
     -- Az(ωⁱ) * Bz(ωⁱ) - Cz(ωⁱ) = constraint evaluation at i-th point
     True := by
   trivial
