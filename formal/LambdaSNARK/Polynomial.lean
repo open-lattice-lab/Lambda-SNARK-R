@@ -7,6 +7,7 @@ Authors: URPKS Contributors
 import LambdaSNARK.Core
 import Mathlib.Algebra.Polynomial.Div
 import Mathlib.Algebra.Polynomial.FieldDivision
+import Mathlib.RingTheory.EuclideanDomain
 import Mathlib.RingTheory.Polynomial.Basic
 import Mathlib.RingTheory.RootsOfUnity.Basic
 import Mathlib.Tactic
@@ -168,7 +169,7 @@ theorem lagrange_interpolate_eval {F : Type*} [Field F]
               ∑ j : Fin m, (if i = j then evals j else 0) := by
     congr 1; ext j
     by_cases h : j = i
-    · simp only [h, eq_comm, ↓reduceIte]
+    · simp only [h, ↓reduceIte]
     · simp only [h, Ne.symm h, ↓reduceIte]
   rw [h_eq]
   simp only [Finset.sum_ite_eq, Finset.mem_univ, ↓reduceIte]
@@ -209,21 +210,149 @@ theorem polynomial_division {F : Type*} [Field F]
     ∃! qr : Polynomial F × Polynomial F,
       f = qr.1 * g + qr.2 ∧ (qr.2 = 0 ∨ qr.2.natDegree < g.natDegree) := by
   classical
+  -- Auxiliary lemmas for degree control
+  have degree_lt_of_natDegree_lt {p : Polynomial F} {m : ℕ}
+      (hp : p.natDegree < m) :
+      p.degree < (m : WithBot ℕ) := by
+    classical
+    by_cases hzero : p = 0
+    · subst hzero
+      have : ((m : WithBot ℕ) ≠ (⊥ : WithBot ℕ)) := by simp
+      exact bot_lt_iff_ne_bot.mpr this
+    · have hdeg := Polynomial.degree_eq_natDegree hzero
+      have : ((p.natDegree : ℕ) : WithBot ℕ) < (m : WithBot ℕ) := by
+        exact_mod_cast hp
+      simpa [hdeg] using this
+  have natDegree_sub_lt_of_lt
+      {p q : Polynomial F} {m : ℕ}
+      (hp : p = 0 ∨ p.natDegree < m)
+      (hq : q = 0 ∨ q.natDegree < m)
+      (hm : 0 < m) :
+      (p - q).natDegree < m := by
+    classical
+    cases hp with
+    | inl hp0 =>
+        subst hp0
+        cases hq with
+        | inl hq0 =>
+            subst hq0
+            simpa [sub_eq_add_neg] using hm
+        | inr hq_lt =>
+            simpa [sub_eq_add_neg] using hq_lt
+    | inr hp_lt =>
+        cases hq with
+      | inl hq0 =>
+        subst hq0
+        simpa using hp_lt
+        | inr hq_lt =>
+            by_cases hsub : p - q = 0
+            · have hzero : (p - q).natDegree = 0 := by simp [hsub]
+              simpa [hzero] using hm
+            ·
+              have hp_deg_lt : p.degree < (m : WithBot ℕ) :=
+                degree_lt_of_natDegree_lt hp_lt
+              have hq_deg_lt : q.degree < (m : WithBot ℕ) :=
+                degree_lt_of_natDegree_lt hq_lt
+              have hdeg_le : (p - q).degree ≤ max p.degree q.degree :=
+                Polynomial.degree_sub_le _ _
+              have hdeg_lt : (p - q).degree < (m : WithBot ℕ) :=
+                lt_of_le_of_lt hdeg_le (max_lt hp_deg_lt hq_deg_lt)
+              have : ((p - q).natDegree : WithBot ℕ) < (m : WithBot ℕ) := by
+                simpa [Polynomial.degree_eq_natDegree hsub] using hdeg_lt
+              exact_mod_cast this
   refine ⟨(f / g, f % g), ?_, ?_⟩
   · -- P3 (Existence): f = (f/g) * g + (f%g) with remainder bound
     constructor
     · simpa [mul_comm] using (EuclideanDomain.div_add_mod f g).symm
-    · by_cases h : f % g = 0
-      · exact Or.inl h
-      · -- Remainder bound via Polynomial.natDegree_mod_lt (FieldDivision.lean:413)
+    · by_cases hunit : IsUnit g
+      · have hdiv : g ∣ f := by
+          rcases hunit with ⟨u, rfl⟩
+          refine ⟨f * ↑(u⁻¹), ?_⟩
+          simp [mul_left_comm]
+        have : f % g = 0 := (EuclideanDomain.mod_eq_zero).2 hdiv
+        exact Or.inl this
+      · have hgNat : g.natDegree ≠ 0 := by
+          intro hdeg
+          have hdeg' : g.degree = (0 : WithBot ℕ) := by
+            simpa [hdeg] using (Polynomial.degree_eq_natDegree hg)
+          have : IsUnit g := (Polynomial.isUnit_iff_degree_eq_zero).2 hdeg'
+          exact hunit this
         right
-        -- Need: g.natDegree ≠ 0 (otherwise g is unit → f % g = 0)
-        sorry -- TODO: Show g.natDegree ≠ 0 via unit characterization (5 lines)
+        exact Polynomial.natDegree_mod_lt f hgNat
   · -- P4 (Uniqueness): via subtraction + degree contradiction
-    intro ⟨q', r'⟩ ⟨hq, hdeg⟩
-    -- Strategy: If q' ≠ f/g, then (q' - f/g)*g = (f%g) - r' has
-    -- deg(LHS) ≥ deg(g) but deg(RHS) < deg(g) → contradiction
-    sorry -- TODO: Case split q' = f/g; else derive degree contradiction (~15 lines)
+    intro ⟨q', r'⟩ ⟨hrepr, hdeg⟩
+    set q := f / g
+    set r := f % g
+    have hcanon : f = q * g + r := by
+      simpa [q, r, mul_comm] using (EuclideanDomain.div_add_mod f g).symm
+    by_cases hunit : IsUnit g
+    · have hgdeg : g.degree = (0 : WithBot ℕ) :=
+        (Polynomial.isUnit_iff_degree_eq_zero).1 hunit
+      have hgNatZero : g.natDegree = 0 := by
+        have hg_ne_zero : g ≠ 0 := hg
+        simpa [Polynomial.degree_eq_natDegree hg_ne_zero] using hgdeg
+      have hr_zero : r = 0 := by
+        have hdiv : g ∣ f := by
+          rcases hunit with ⟨u, rfl⟩
+          refine ⟨f * ↑(u⁻¹), ?_⟩
+          simp [mul_left_comm]
+        have : f % g = 0 := (EuclideanDomain.mod_eq_zero).2 hdiv
+        simpa [r] using this
+      have hdeg' : r' = 0 ∨ r'.natDegree < 0 := by
+        simpa [hgNatZero] using hdeg
+      have hr'_zero : r' = 0 := hdeg'.resolve_right (Nat.not_lt_zero _)
+      have hcanon' : f = q * g := by simpa [hr_zero, add_comm] using hcanon
+      have hrepr' : f = q' * g := by simpa [hr'_zero, add_comm] using hrepr
+      have hmul : q * g = q' * g := hcanon'.symm.trans hrepr'
+      have hq_eq : q = q' := mul_right_cancel₀ hg hmul
+      refine Prod.ext ?_ ?_
+      · simpa using hq_eq.symm
+      · simp [hr_zero, hr'_zero]
+    · have hgNat : g.natDegree ≠ 0 := by
+        intro hdeg
+        have hdeg' : g.degree = (0 : WithBot ℕ) := by
+          simpa [hdeg] using (Polynomial.degree_eq_natDegree hg)
+        have : IsUnit g := (Polynomial.isUnit_iff_degree_eq_zero).2 hdeg'
+        exact hunit this
+      have hgNatPos : 0 < g.natDegree := Nat.pos_of_ne_zero hgNat
+      have hr_bound : r = 0 ∨ r.natDegree < g.natDegree := by
+        by_cases hr0 : r = 0
+        · exact Or.inl hr0
+        · have hlt : (f % g).natDegree < g.natDegree :=
+            Polynomial.natDegree_mod_lt f hgNat
+          right; simpa [r] using hlt
+      have hrepr_eq : q' * g + r' = q * g + r := by
+        have h := hcanon.symm.trans hrepr
+        simpa [q, r] using h.symm
+      have hr_diff_lt : (r' - r).natDegree < g.natDegree :=
+        natDegree_sub_lt_of_lt hdeg hr_bound hgNatPos
+      have hcomb : (q' - q) * g + (r' - r) = 0 := by
+        simpa [sub_eq_add_neg, add_comm, add_left_comm, add_assoc, add_right_comm,
+          mul_add, add_mul]
+          using congrArg (fun x => x - q * g - r) hrepr_eq
+      have hdiff : r' - r = -((q' - q) * g) :=
+        eq_neg_of_add_eq_zero_right hcomb
+      have hq_eq : q' = q := by
+        by_contra hneq
+        have hsub_ne : q' - q ≠ 0 := sub_ne_zero_of_ne hneq
+        have hprod : (r' - r).natDegree = (q' - q).natDegree + g.natDegree := by
+          have := Polynomial.natDegree_mul hsub_ne hg
+          simpa [hdiff, Polynomial.natDegree_neg] using this
+        have hge : g.natDegree ≤ (r' - r).natDegree := by
+          have hbase : g.natDegree ≤ (q' - q).natDegree + g.natDegree :=
+            Nat.le_add_left _ _
+          have hrewrite : (q' - q).natDegree + g.natDegree = (r' - r).natDegree :=
+            hprod.symm
+          exact by
+            calc
+              g.natDegree ≤ (q' - q).natDegree + g.natDegree := hbase
+              _ = (r' - r).natDegree := hrewrite
+        exact (not_lt_of_ge hge) hr_diff_lt
+      have hr_eq : r' = r := by
+        have hsum : q * g + r' = q * g + r := by
+          simpa [hq_eq, q, r] using hrepr_eq
+        exact add_left_cancel hsum
+      ext <;> simp [q, r, hq_eq, hr_eq]
 
 /-- Divide a polynomial by the vanishing polynomial. -/
 noncomputable def divide_by_vanishing {F : Type*} [Field F]
