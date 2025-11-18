@@ -47,6 +47,7 @@ namespace LambdaSNARK
 
 open scoped BigOperators
 open BigOperators Polynomial
+open LambdaSNARK
 
 /-!
 ## Combinatorial Helpers
@@ -746,6 +747,136 @@ lemma constraint_poly_zero_of_equations (VC : VectorCommitment F) (cs : R1CS F)
   have h_zero := (satisfies_iff_constraint_zero cs w).mp h_sat
   simpa [w] using h_zero
 
+lemma constraint_numerator_eval_zero_of_equations (VC : VectorCommitment F)
+    (cs : R1CS F) {t1 t2 : Transcript F VC} {h_fork : is_valid_fork VC t1 t2}
+    (eqns : ForkingVerifierEquations VC cs t1 t2 h_fork)
+    (x : PublicInput F cs.nPub) :
+    ∀ i : Fin cs.nCons,
+      (LambdaSNARK.constraintNumeratorPoly cs
+        (extract_witness VC cs
+          (extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω)
+          eqns.m eqns.ω eqns.h_m_vars x) eqns.ω).eval
+            (eqns.ω ^ (i : ℕ)) = 0 := by
+  classical
+  set q := extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω
+  set w := extract_witness VC cs q eqns.m eqns.ω eqns.h_m_vars x
+  have h_zero_raw := constraint_poly_zero_of_equations (VC := VC) (cs := cs)
+      (t1 := t1) (t2 := t2) (h_fork := h_fork) eqns x
+  have h_zero : ∀ i : Fin cs.nCons, constraintPoly cs w i = 0 := by
+    simpa [q, w] using h_zero_raw
+  have h_prim : IsPrimitiveRoot eqns.ω cs.nCons := by
+    simpa [eqns.h_m_cons] using eqns.h_primitive
+  intro i
+  have h_num :=
+    LambdaSNARK.constraintNumeratorPoly_eval_domain_of_constraint_zero (cs := cs)
+      (z := w) (ω := eqns.ω) h_prim h_zero i
+  simpa [q, w] using h_num
+
+lemma constraint_numerator_eval_matches_quotient_of_equations
+    (VC : VectorCommitment F) (cs : R1CS F)
+    {t1 t2 : Transcript F VC} {h_fork : is_valid_fork VC t1 t2}
+    (eqns : ForkingVerifierEquations VC cs t1 t2 h_fork)
+    (x : PublicInput F cs.nPub) :
+    ∀ i : Fin cs.nCons,
+      (LambdaSNARK.constraintNumeratorPoly cs
+        (extract_witness VC cs
+          (extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω)
+          eqns.m eqns.ω eqns.h_m_vars x) eqns.ω).eval (eqns.ω ^ (i : ℕ)) =
+        (extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω).eval
+          (eqns.ω ^ (i : ℕ)) := by
+  classical
+  set q := extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω
+  set w := extract_witness VC cs q eqns.m eqns.ω eqns.h_m_vars x
+  have h_prim : IsPrimitiveRoot eqns.ω cs.nCons := by
+    simpa [eqns.h_m_cons] using eqns.h_primitive
+  intro i
+  have h_eval := eqns.quotient_eval x i
+  have h_cp := LambdaSNARK.constraintPoly_eval_domain_eq_constraintNumerator
+      (cs := cs) (z := w) (ω := eqns.ω) h_prim i
+  have h_match :
+      q.eval (eqns.ω ^ (i : ℕ)) =
+        (LambdaSNARK.constraintNumeratorPoly cs w eqns.ω).eval (eqns.ω ^ (i : ℕ)) := by
+    simpa [q, w, h_cp] using h_eval
+  simpa [q, w] using h_match.symm
+
+lemma constraint_numerator_mod_vanishing_zero_of_equations (VC : VectorCommitment F)
+    (cs : R1CS F) {t1 t2 : Transcript F VC} {h_fork : is_valid_fork VC t1 t2}
+    (eqns : ForkingVerifierEquations VC cs t1 t2 h_fork)
+    (x : PublicInput F cs.nPub) :
+    (LambdaSNARK.constraintNumeratorPoly cs
+      (extract_witness VC cs
+        (extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω)
+        eqns.m eqns.ω eqns.h_m_vars x) eqns.ω)
+        %ₘ vanishing_poly cs.nCons eqns.ω = 0 := by
+  classical
+  set q := extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω
+  set w := extract_witness VC cs q eqns.m eqns.ω eqns.h_m_vars x
+  have h_zero_raw := constraint_poly_zero_of_equations (VC := VC) (cs := cs)
+      (t1 := t1) (t2 := t2) (h_fork := h_fork) eqns x
+  have h_zero : ∀ i : Fin cs.nCons, constraintPoly cs w i = 0 := by
+    simpa [q, w] using h_zero_raw
+  have h_prim : IsPrimitiveRoot eqns.ω cs.nCons := by
+    simpa [eqns.h_m_cons] using eqns.h_primitive
+  have h_mod :=
+    LambdaSNARK.constraintNumeratorPoly_mod_vanishing_zero_of_constraint_zero (cs := cs)
+      (z := w) (ω := eqns.ω) h_prim h_zero
+  simpa [q, w] using h_mod
+
+lemma constraint_quotient_sub_numerator_mod_vanishing_zero_of_equations
+    (VC : VectorCommitment F) (cs : R1CS F)
+    {t1 t2 : Transcript F VC} {h_fork : is_valid_fork VC t1 t2}
+    (eqns : ForkingVerifierEquations VC cs t1 t2 h_fork)
+    (x : PublicInput F cs.nPub) :
+    ((extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω)
+        - LambdaSNARK.constraintNumeratorPoly cs
+            (extract_witness VC cs
+              (extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω)
+              eqns.m eqns.ω eqns.h_m_vars x) eqns.ω)
+        %ₘ vanishing_poly cs.nCons eqns.ω = 0 := by
+  classical
+  set q := extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω
+  set w := extract_witness VC cs q eqns.m eqns.ω eqns.h_m_vars x
+  have h_prim : IsPrimitiveRoot eqns.ω cs.nCons := by
+    simpa [eqns.h_m_cons] using eqns.h_primitive
+  refine (remainder_zero_iff_vanishing
+      (f := q - LambdaSNARK.constraintNumeratorPoly cs w eqns.ω)
+      (m := cs.nCons) (ω := eqns.ω) h_prim).2 ?_
+  intro i
+  have h_match := constraint_numerator_eval_matches_quotient_of_equations
+      (VC := VC) (cs := cs) (t1 := t1) (t2 := t2) (h_fork := h_fork)
+      eqns x i
+  simpa [q, w, Polynomial.eval_sub, sub_eq_add_neg] using
+    (sub_eq_zero.mpr h_match.symm)
+
+lemma vanishing_poly_dvd_quotient_sub_numerator_of_equations
+    (VC : VectorCommitment F) (cs : R1CS F)
+    {t1 t2 : Transcript F VC} {h_fork : is_valid_fork VC t1 t2}
+    (eqns : ForkingVerifierEquations VC cs t1 t2 h_fork)
+    (x : PublicInput F cs.nPub) :
+    vanishing_poly cs.nCons eqns.ω ∣
+      (extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω
+        - LambdaSNARK.constraintNumeratorPoly cs
+            (extract_witness VC cs
+              (extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω)
+              eqns.m eqns.ω eqns.h_m_vars x) eqns.ω) := by
+  classical
+  set q := extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω
+  set w :=
+    extract_witness VC cs q eqns.m eqns.ω eqns.h_m_vars x
+  have h_monic : (vanishing_poly cs.nCons eqns.ω).Monic := by
+    classical
+    unfold LambdaSNARK.vanishing_poly
+    apply Polynomial.monic_prod_of_monic
+    intro i _
+    simpa using Polynomial.monic_X_sub_C (eqns.ω ^ (i : ℕ))
+  have h_mod :=
+    constraint_quotient_sub_numerator_mod_vanishing_zero_of_equations (VC := VC)
+      (cs := cs) (t1 := t1) (t2 := t2) (h_fork := h_fork) eqns x
+  have h_dvd :=
+    (Polynomial.modByMonic_eq_zero_iff_dvd h_monic).1
+      (by simpa [q, w] using h_mod)
+  simpa [q, w] using h_dvd
+
 end ForkingEquations
 
 -- ============================================================================
@@ -779,6 +910,14 @@ theorem extraction_soundness {F : Type} [Field F] [Fintype F] [DecidableEq F]
 /-- A provider that, given any fork of transcripts, returns the verifier
     equations witness required by `extraction_soundness`. Concrete protocol
     instantiations must supply such a provider. -/
+structure ProtocolForkingEquations {F : Type} [Field F] [Fintype F]
+    [DecidableEq F] (VC : VectorCommitment F) (cs : R1CS F) where
+  square : cs.nVars = cs.nCons
+  buildCore :
+    (t1 t2 : Transcript F VC) →
+    (h_fork : is_valid_fork VC t1 t2) →
+    ForkingVerifierEquationsCore VC cs t1 t2 h_fork
+
 structure ForkingEquationsProvider {F : Type} [Field F] [Fintype F]
     [DecidableEq F] (VC : VectorCommitment F) (cs : R1CS F) where
   square : cs.nVars = cs.nCons
@@ -790,6 +929,7 @@ structure ForkingEquationsProvider {F : Type} [Field F] [Fintype F]
 namespace ForkingEquationsProvider
 
 variable {F : Type} [Field F] [Fintype F] [DecidableEq F]
+variable {VC : VectorCommitment F} {cs : R1CS F}
 
 @[simp]
 def build (provider : ForkingEquationsProvider VC cs)
@@ -803,6 +943,12 @@ def build (provider : ForkingEquationsProvider VC cs)
     h_primitive := core.h_primitive
     quotient_eval := core.quotient_eval
     remainder_zero := core.remainder_zero }
+
+def ofProtocol (VC : VectorCommitment F) (cs : R1CS F)
+  (proto : ProtocolForkingEquations VC cs) :
+  ForkingEquationsProvider VC cs :=
+  { square := proto.square
+    buildCore := proto.buildCore }
 
 end ForkingEquationsProvider
 
