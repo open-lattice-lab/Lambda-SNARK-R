@@ -5,6 +5,7 @@ Authors: URPKS Contributors
 -/
 
 import LambdaSNARK.Core
+import Mathlib.Algebra.Polynomial.CoeffList
 import Mathlib.Algebra.Polynomial.Div
 import Mathlib.Algebra.Polynomial.FieldDivision
 import Mathlib.RingTheory.EuclideanDomain
@@ -13,7 +14,7 @@ import Mathlib.RingTheory.RootsOfUnity.Basic
 import Mathlib.Tactic
 
 open scoped BigOperators
-open Polynomial
+open Polynomial List
 
 noncomputable section
 
@@ -34,6 +35,64 @@ This file contains polynomial-related lemmas and operations:
 -/
 
 namespace LambdaSNARK
+
+open Polynomial
+
+-- ============================================================================
+-- Coefficient List Uniqueness
+-- ============================================================================
+
+section CoeffList
+
+variable {F : Type*} [Semiring F]
+
+lemma polynomial_eq_of_coeffList_eq {p q : Polynomial F}
+    (h : Polynomial.coeffList p = Polynomial.coeffList q) : p = q := by
+  classical
+  have h_map : (List.range p.degree.succ).map p.coeff =
+      (List.range q.degree.succ).map q.coeff := by
+    have := congrArg List.reverse h
+    simpa [Polynomial.coeffList, List.map_reverse, List.reverse_reverse]
+      using this
+  have h_len : p.degree.succ = q.degree.succ := by
+    simpa [List.length_map, List.length_range] using congrArg List.length h_map
+  ext n
+  by_cases hn : n < p.degree.succ
+  · have hn' : n < q.degree.succ := by simpa [h_len] using hn
+    have h_get := congrArg (fun (l : List F) => l[n]?) h_map
+    have h_left : ((List.range p.degree.succ).map p.coeff)[n]? =
+        some (p.coeff n) := by
+      simp [hn]
+    have h_right : ((List.range q.degree.succ).map q.coeff)[n]? =
+        some (q.coeff n) := by
+      simp [hn']
+    simpa [h_left, h_right] using h_get
+  · have h_le : p.degree.succ ≤ n := Nat.le_of_not_lt hn
+    have hzero_p : p.coeff n = 0 := by
+      by_cases hp : p = 0
+      · subst hp; simp
+      · have h_nat : p.natDegree + 1 ≤ n := by
+          simpa [withBotSucc_degree_eq_natDegree_add_one hp] using h_le
+        have h_lt : p.natDegree < n :=
+          Nat.lt_of_lt_of_le (Nat.lt_succ_self _) h_nat
+        exact coeff_eq_zero_of_natDegree_lt h_lt
+    have hzero_q : q.coeff n = 0 := by
+      by_cases hq : q = 0
+      · subst hq; simp
+      · have h_le_q : q.degree.succ ≤ n := by simpa [h_len] using h_le
+        have h_nat : q.natDegree + 1 ≤ n := by
+          simpa [withBotSucc_degree_eq_natDegree_add_one hq] using h_le_q
+        have h_lt : q.natDegree < n :=
+          Nat.lt_of_lt_of_le (Nat.lt_succ_self _) h_nat
+        exact coeff_eq_zero_of_natDegree_lt h_lt
+    simp [hzero_p, hzero_q]
+
+lemma coeffList_injective :
+    Function.Injective (fun p : Polynomial F => Polynomial.coeffList p) := by
+  intro p q h
+  exact polynomial_eq_of_coeffList_eq h
+
+end CoeffList
 
 -- ============================================================================
 -- Vanishing Polynomial

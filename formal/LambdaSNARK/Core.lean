@@ -164,6 +164,23 @@ structure VectorCommitment (F : Type) [CommRing F] where
     -- Evaluation would use polynomial constructed from v
     verify pp c α α π = true  -- Simplified for now
 
+/-- Any two openings that agree on the same randomness and message list map to identical commitments. -/
+lemma VectorCommitment.commit_eq_iff {F : Type} [CommRing F]
+    (VC : VectorCommitment F) (pp : VC.PP) (r : ℕ)
+    (v₁ v₂ : List F)
+    (h : VC.commit pp v₁ r = VC.commit pp v₂ r) : v₁ = v₂ := by
+  classical
+  by_contra h_ne
+  have := VC.binding pp v₁ v₂ r r h_ne h
+  exact this.elim
+
+/-- Commitments collide only when the underlying messages coincide. -/
+lemma VectorCommitment.commit_injective {F : Type} [CommRing F]
+    (VC : VectorCommitment F) (pp : VC.PP) (r : ℕ) :
+    Function.Injective fun v : List F => VC.commit pp v r := by
+  intro v₁ v₂ h_eq
+  exact VC.commit_eq_iff pp r v₁ v₂ h_eq
+
 /-- Proof structure for ΛSNARK-R -/
 structure Proof (F : Type) [CommRing F] (VC : VectorCommitment F) where
   -- Commitments to witness polynomials
@@ -204,6 +221,8 @@ def verify_with_quotient {F : Type} [Field F] [DecidableEq F]
     (VC : VectorCommitment F) (cs : R1CS F)
     (x : PublicInput F cs.nPub) (π : Proof F VC)
     (m : ℕ) (ω : F) (hω : IsPrimitiveRoot ω m) (h_m : m = cs.nCons) : Prop :=
+  let _ := hω
+  let _ := h_m
   verify VC cs x π = true ∧
   -- Quotient polynomial opening is valid at challenge α
   (∃ pp, VC.verify pp π.comm_quotient π.challenge_α

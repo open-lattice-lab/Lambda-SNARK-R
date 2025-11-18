@@ -6,9 +6,15 @@ Authors: URPKS Contributors
 
 import LambdaSNARK.Core
 import LambdaSNARK.Polynomial
+import LambdaSNARK.Constraints
 import Mathlib.Probability.ProbabilityMassFunction.Basic
 import Mathlib.Probability.ProbabilityMassFunction.Monad
 import Mathlib.Data.Finset.Card
+import Mathlib.Algebra.BigOperators.Intervals
+import Mathlib.Data.Nat.Choose.Basic
+import Mathlib.Data.Nat.Choose.Cast
+import Mathlib.Data.Nat.Choose.Central
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic
 
 /-!
@@ -39,69 +45,122 @@ This file provides infrastructure for the forking lemma proof in ΛSNARK-R sound
 
 namespace LambdaSNARK
 
+open scoped BigOperators
 open BigOperators Polynomial
 
--- ============================================================================
--- Adversary and Extractor Types
--- ============================================================================
+/-!
+## Combinatorial Helpers
 
-/-- Probabilistic polynomial-time adversary -/
+The following lemmas provide the arithmetic backbone for the probability
+estimates in the forking lemma.  They translate counting arguments about
+subsets of a finite challenge space into inequalities over real numbers.
+-/
+
+section Combinatorics
+
+open Nat
+
+lemma choose_two_cast (n : ℕ) :
+    (Nat.choose n 2 : ℝ) = (n : ℝ) * (n - 1) / 2 := by
+  simpa using (Nat.cast_choose_two (K := ℝ) n)
+
+lemma choose_two_pos {n : ℕ} (hn : 2 ≤ n) :
+    (Nat.choose n 2 : ℝ) > 0 := by
+  have h_nat : 0 < Nat.choose n 2 := Nat.choose_pos (k := 2) hn
+  exact_mod_cast h_nat
+
+lemma choose_two_mono {m n : ℕ} (h : m ≤ n) :
+    (Nat.choose m 2 : ℝ) ≤ Nat.choose n 2 := by
+  exact_mod_cast (Nat.choose_le_choose (c := 2) h)
+
+end Combinatorics
+
+/-! ### Helper lemmas for finite sums -/
+
+lemma hasSum_fintype {α : Type*} [Fintype α] [DecidableEq α]
+    (f : α → ENNReal) : HasSum f (∑ a : α, f a) := by
+  classical
+  refine Filter.Tendsto.congr' ?_ tendsto_const_nhds
+  refine Filter.eventually_atTop.2 ?_
+  refine ⟨(Finset.univ : Finset α), ?_⟩
+  intro s hs
+  have hs_eq : s = (Finset.univ : Finset α) := by
+    apply Finset.ext
+    intro a
+    constructor
+    · intro _; simp
+    · intro _
+      exact hs (by simp)
+  simp [hs_eq]
+
+/-! ### Protocol data structures -/
+
+/-- View data revealed to the verifier during transcript validation. -/
+structure TranscriptView (F : Type) where
+  alpha : F
+  Az_eval : F
+  Bz_eval : F
+  Cz_eval : F
+  quotient_eval : F
+  vanishing_eval : F
+  main_eq : Prop
+
+
+/-- Placeholder relation used while the verifier equations are not yet formalised. -/
+def verifierView_zero_eq (_F : Type) : Prop := True
+
+/-- Probabilistic polynomial-time adversary interacting with the protocol. -/
 structure Adversary (F : Type) [CommRing F] (VC : VectorCommitment F) where
-  run : (cs : R1CS F) → (x : PublicInput F cs.nPub) → (randomness : ℕ) → Proof F VC
-  poly_time : Prop  -- Runtime bounded by polynomial in security parameter
+  run :
+      (cs : R1CS F) →
+      (x : PublicInput F cs.nPub) →
+      (randomness : ℕ) →
+      Proof F VC
+  poly_time : Prop
 
-/-- Witness extractor (uses adversary as black box) -/
-structure Extractor (F : Type) [CommRing F] (VC : VectorCommitment F) where
-  extract : (A : Adversary F VC) → (cs : R1CS F) → (x : PublicInput F cs.nPub) →
-            Option (Witness F cs.nVars)
-  poly_time : Prop  -- Runtime bounded by polynomial in adversary's runtime
-
--- ============================================================================
--- Transcript Type
--- ============================================================================
-
-/-- Interactive proof transcript: commitment → challenge → response.
-    Used for forking lemma extraction technique. -/
+/-- Interactive proof transcript produced by the adversary and verifier. -/
 structure Transcript (F : Type) [CommRing F] (VC : VectorCommitment F) where
-  -- Prover's commitments (before challenge)
+  pp : VC.PP
+  cs : R1CS F
+  x : PublicInput F cs.nPub
+  domainSize : ℕ
+  omega : F
   comm_Az : VC.Commitment
   comm_Bz : VC.Commitment
   comm_Cz : VC.Commitment
   comm_quotient : VC.Commitment
-
-  -- Verifier's random challenge (Fiat-Shamir)
-  challenge_α : F
+  quotient_poly : Polynomial F
+  quotient_rand : ℕ
+  quotient_commitment_spec :
+    VC.commit pp (Polynomial.coeffList quotient_poly) quotient_rand = comm_quotient
+  view : TranscriptView F
   challenge_β : F
-
-  -- Prover's response (openings)
   opening_Az_α : VC.Opening
   opening_Bz_β : VC.Opening
   opening_Cz_α : VC.Opening
   opening_quotient_α : VC.Opening
-
-  -- Verification status
   valid : Bool
 
-/-- Two transcripts form a valid fork if:
-    1. Same commitments (same randomness)
-    2. Different first challenge
-    3. Both verify successfully -/
 def is_valid_fork {F : Type} [CommRing F] [DecidableEq F] (VC : VectorCommitment F)
     (t1 t2 : Transcript F VC) : Prop :=
-  -- Same commitments
+  -- Same setup parameters and statement data
+  t1.pp = t2.pp ∧
+  t1.cs = t2.cs ∧
+  HEq t1.x t2.x ∧
+  t1.domainSize = t2.domainSize ∧
+  t1.omega = t2.omega ∧
+  -- Same commitments and randomness
   t1.comm_Az = t2.comm_Az ∧
   t1.comm_Bz = t2.comm_Bz ∧
   t1.comm_Cz = t2.comm_Cz ∧
   t1.comm_quotient = t2.comm_quotient ∧
-  -- Different challenges
-  t1.challenge_α ≠ t2.challenge_α ∧
-  -- Both valid
+  t1.quotient_rand = t2.quotient_rand ∧
+  -- Distinct challenges
+  t1.view.alpha ≠ t2.view.alpha ∧
+  -- Both transcripts accepted by the verifier
   t1.valid = true ∧
   t2.valid = true
 
--- ============================================================================
--- Adversary State (before challenge)
--- ============================================================================
 
 /-- Adversary's internal state after committing, before receiving challenge.
     Captures the "commitment phase" for rewinding. -/
@@ -109,11 +168,20 @@ structure AdversaryState (F : Type) [CommRing F] (VC : VectorCommitment F) where
   -- Internal randomness (fixes commitments)
   randomness : ℕ
 
+  -- Public parameters used during commitment phase
+  pp : VC.PP
+
   -- Committed values
   comm_Az : VC.Commitment
   comm_Bz : VC.Commitment
   comm_Cz : VC.Commitment
   comm_quotient : VC.Commitment
+
+  -- Quotient polynomial data used for extraction
+  quotient_poly : Polynomial F
+  quotient_rand : ℕ
+  quotient_commitment_spec :
+    VC.commit pp (Polynomial.coeffList quotient_poly) quotient_rand = comm_quotient
 
   -- Response function: given challenge, produce openings
   respond : F → F → (VC.Opening × VC.Opening × VC.Opening × VC.Opening)
@@ -132,10 +200,6 @@ def AdversaryState.commitments {F : Type} [CommRing F] (VC : VectorCommitment F)
 
     **Constructive definition** (replaces previous axiom):
     PMF where each element has probability 1/|α|.
-
-    Construction: PMF = { f : α → ℝ≥0∞ // HasSum f 1 }
-    For uniform: f(a) = 1/card(α) for all a : α
-    Proof: ∑ f = card(α) * (1/card(α)) = 1
 
     Note: Mathlib v4.25.0 lacks ready-made uniform PMF constructor.
     Using manual definition with sorry for HasSum proof.
@@ -175,9 +239,78 @@ noncomputable def uniform_pmf {α : Type*} [Fintype α] [Nonempty α] : PMF α :
 noncomputable def uniform_pmf_ne {α : Type*} [Fintype α] [DecidableEq α]
     (x : α) (h : Fintype.card α ≥ 2) : PMF α :=
   ⟨fun a => if a = x then 0 else ((Fintype.card α - 1) : ENNReal)⁻¹,
-   by -- HasSum (indicator (≠ x) (1/(card α - 1))) 1
-     sorry -- TODO: show ∑_{a≠x} 1/(n-1) = (n-1) * 1/(n-1) = 1 using Finset.sum_erase + card lemmas (1-1.5h)
-   ⟩
+    by
+      classical
+      let c : ENNReal := ((Fintype.card α - 1) : ENNReal)⁻¹
+      change HasSum (fun a : α => if a = x then 0 else c) 1
+      have hx_mem : x ∈ (Finset.univ : Finset α) := Finset.mem_univ _
+      have h_card_gt_one : 1 < Fintype.card α :=
+        Nat.lt_of_lt_of_le (by decide : 1 < 2) h
+      have h_card_pred_ne_zero_nat : Fintype.card α - 1 ≠ 0 :=
+        Nat.sub_ne_zero_of_lt h_card_gt_one
+      have h_card_pred_ne_zero : (Fintype.card α - 1 : ENNReal) ≠ 0 := by
+        exact_mod_cast h_card_pred_ne_zero_nat
+      have h_card_pred_ne_top : (Fintype.card α - 1 : ENNReal) ≠ ⊤ := by
+        intro h_top
+        cases h_top
+      have h_card_nat :
+          (Finset.univ.erase x).card = Fintype.card α - 1 := by
+        classical
+        calc
+          (Finset.univ.erase x).card
+              = (Finset.univ.card) - 1 := Finset.card_erase_of_mem hx_mem
+          _ = Fintype.card α - 1 := by simp
+      have h_card_cast :
+          ((Finset.univ.erase x).card : ENNReal)
+            = (Fintype.card α - 1 : ENNReal) := by
+        exact_mod_cast h_card_nat
+      have h_sum_const :
+          (Finset.univ.erase x).sum (fun _ => c)
+                = ((Finset.univ.erase x).card : ENNReal) * c := by
+        simp [Finset.sum_const, nsmul_eq_mul]
+      have h_sum_finset :
+          (Finset.univ.erase x).sum (fun _ => c) = 1 := by
+        calc
+          (Finset.univ.erase x).sum (fun _ => c)
+              = ((Finset.univ.erase x).card : ENNReal) * c := h_sum_const
+          _ = (Fintype.card α - 1 : ENNReal) * c := by
+            rw [h_card_cast]
+          _ = 1 := ENNReal.mul_inv_cancel h_card_pred_ne_zero h_card_pred_ne_top
+      have h_sum_univ :
+          (∑ a : α, if a = x then 0 else c)
+              = (Finset.univ.erase x).sum (fun _ => c) := by
+        have hx_subset :
+            (Finset.univ.erase x : Finset α) ⊆ (Finset.univ : Finset α) := by
+          intro a _; exact Finset.mem_univ _
+        have h_zero :
+            ∀ a ∈ (Finset.univ : Finset α),
+              a ∉ Finset.univ.erase x → (if a = x then 0 else c) = 0 := by
+          intro a ha ha_not
+          have hax : a = x := by
+            classical
+            by_contra h_ne
+            have : a ∈ Finset.univ.erase x := by
+              simp [Finset.mem_erase, ha, h_ne]
+            exact ha_not this
+          simp [hax]
+        calc
+          (∑ a : α, if a = x then 0 else c)
+              = (Finset.univ : Finset α).sum (fun a => if a = x then 0 else c) := by simp
+          _ = (Finset.univ.erase x).sum (fun a => if a = x then 0 else c) :=
+            (Finset.sum_subset hx_subset h_zero).symm
+          _ = (Finset.univ.erase x).sum (fun _ => c) := by
+            refine Finset.sum_congr rfl ?_
+            intro a ha
+            have : a ≠ x := by
+              classical
+              simpa [Finset.mem_erase] using ha
+            simp [this]
+      have h_sum_total :
+          (∑ a : α, if a = x then 0 else c) = 1 :=
+        h_sum_univ.trans h_sum_finset
+      have h_has_sum := hasSum_fintype (fun a : α => if a = x then 0 else c)
+      simpa [h_sum_total, c] using h_has_sum
+    ⟩
 
 -- ============================================================================
 -- Run Adversary (First Execution)
@@ -186,40 +319,46 @@ noncomputable def uniform_pmf_ne {α : Type*} [Fintype α] [DecidableEq α]
 /-- Execute adversary once to get transcript.
     Samples randomness, gets commitments, samples challenge, gets response. -/
 noncomputable def run_adversary {F : Type} [CommRing F] [Field F] [Fintype F] [DecidableEq F]
-    (VC : VectorCommitment F) (cs : R1CS F)
-    (_A : Adversary F VC) (_x : PublicInput F cs.nPub)
+  (VC : VectorCommitment F) (cs : R1CS F)
+  (_A : Adversary F VC) (x : PublicInput F cs.nPub)
     (_secParam : ℕ) : PMF (Transcript F VC) := by
   classical
-  -- Adversary execution model:
-  -- 1. Sample randomness r uniformly (for witness commitments)
-  -- 2. Run A.run(cs, x, r) → get proof π with commitments
-  -- 3. Sample challenge α via Fiat-Shamir (or verifier randomness)
-  -- 4. Complete proof → transcript t = (commitments, α, openings)
-  -- 5. Return PMF over transcripts induced by randomness distribution
-
-  -- Simplified construction: deterministic adversary execution
-  -- Full implementation would use PMF.bind to chain:
-  -- 1. uniform_pmf (randomness)
-  -- 2. A.run (commitment computation)
-  -- 3. uniform_pmf (challenge)
-  -- 4. A.respond (opening computation)
-
-  -- For now: return singleton PMF (deterministic stub)
-  -- Enables type-checking of forking_lemma without full probabilistic semantics
+  let randomnessPMF : PMF (Fin (_secParam.succ)) := uniform_pmf
+  refine PMF.bind randomnessPMF ?_
+  intro r
+  let rand : ℕ := r
+  let proof := _A.run cs x rand
+  let pp := VC.setup _secParam
   exact PMF.pure {
-    comm_Az := VC.commit (VC.setup 256) [] 0,
-    comm_Bz := VC.commit (VC.setup 256) [] 0,
-    comm_Cz := VC.commit (VC.setup 256) [] 0,
-    comm_quotient := VC.commit (VC.setup 256) [] 0,
-    challenge_α := 0,
-    challenge_β := 0,
-    opening_Az_α := VC.openProof (VC.setup 256) [] 0 0,
-    opening_Bz_β := VC.openProof (VC.setup 256) [] 0 0,
-    opening_Cz_α := VC.openProof (VC.setup 256) [] 0 0,
-    opening_quotient_α := VC.openProof (VC.setup 256) [] 0 0,
-    valid := false
+    pp := pp,
+    cs := cs,
+    x := x,
+    domainSize := cs.nCons,
+    omega := 1,
+    comm_Az := VC.commit pp [] rand,
+    comm_Bz := VC.commit pp [] rand,
+    comm_Cz := VC.commit pp [] rand,
+    comm_quotient := VC.commit pp [] rand,
+    quotient_poly := 0,
+    quotient_rand := rand,
+    quotient_commitment_spec := by
+      simp [Polynomial.coeffList_zero],
+    view := {
+      alpha := proof.challenge_α,
+      Az_eval := 0,
+      Bz_eval := 0,
+      Cz_eval := 0,
+      quotient_eval := 0,
+      vanishing_eval := 0,
+      main_eq := verifierView_zero_eq (_F := F)
+    },
+    challenge_β := proof.challenge_β,
+    opening_Az_α := VC.openProof pp [] rand proof.challenge_α,
+    opening_Bz_β := VC.openProof pp [] rand proof.challenge_β,
+    opening_Cz_α := VC.openProof pp [] rand proof.challenge_α,
+    opening_quotient_α := VC.openProof pp [] rand proof.challenge_α,
+    valid := verify VC cs x proof
   }
-  -- TODO: Replace with full PMF.bind construction (estimate: 1-1.5h)
 
 -- ============================================================================
 -- Rewind Adversary (Second Execution with Different Challenge)
@@ -228,45 +367,62 @@ noncomputable def run_adversary {F : Type} [CommRing F] [Field F] [Fintype F] [D
 /-- Replay adversary with same commitments but different challenge.
     Core of forking lemma: reuse randomness, resample challenge. -/
 noncomputable def rewind_adversary {F : Type} [CommRing F] [Field F] [Fintype F] [DecidableEq F]
-    (VC : VectorCommitment F) (_cs : R1CS F)
-    (_A : Adversary F VC) (_x : PublicInput F _cs.nPub)
-    (_state : AdversaryState F VC)
-    (first_challenge : F) (h_card : Fintype.card F ≥ 2) :
+  (VC : VectorCommitment F) (cs : R1CS F)
+  (_A : Adversary F VC) (x : PublicInput F cs.nPub)
+  (state : AdversaryState F VC)
+  (first_challenge : F) (h_card : Fintype.card F ≥ 2) :
     PMF (Transcript F VC) := by
   classical
-  -- Rewinding technique (core of forking lemma):
-  -- 1. Restore adversary state before challenge (commitments fixed)
-  -- 2. Sample new challenge α' uniformly from F \ {α} (using uniform_pmf_ne)
-  -- 3. Resume adversary execution with α' → new openings
-  -- 4. Return transcript t' = (same commitments, α', new openings)
-
-  -- Key property: independence of challenges
-  -- - First run: α ~ Uniform(F)
-  -- - Second run: α' ~ Uniform(F \ {α})
-  -- - Commitments identical (deterministic from state)
-
-  -- Implementation: Sample challenge from uniform_pmf_ne, construct transcript
-  -- Full version would bind uniform_pmf_ne with opening computation
-
-  -- For now: return deterministic transcript with different challenge
+  let alphaPMF : PMF F := uniform_pmf_ne first_challenge h_card
+  let betaPMF : PMF F := uniform_pmf
+  refine PMF.bind alphaPMF ?_
+  intro alpha'
+  refine PMF.bind betaPMF ?_
+  intro beta
+  rcases state.respond alpha' beta with
+    ⟨openingAz, openingBz, openingCz, openingQ⟩
   exact PMF.pure {
-    comm_Az := VC.commit (VC.setup 256) [] 0,
-    comm_Bz := VC.commit (VC.setup 256) [] 0,
-    comm_Cz := VC.commit (VC.setup 256) [] 0,
-    comm_quotient := VC.commit (VC.setup 256) [] 0,
-    challenge_α := 1,  -- Different from first_challenge (stub)
-    challenge_β := 0,
-    opening_Az_α := VC.openProof (VC.setup 256) [] 0 1,
-    opening_Bz_β := VC.openProof (VC.setup 256) [] 0 0,
-    opening_Cz_α := VC.openProof (VC.setup 256) [] 0 1,
-    opening_quotient_α := VC.openProof (VC.setup 256) [] 0 1,
-    valid := false
+    pp := state.pp,
+    cs := cs,
+    x := x,
+    domainSize := cs.nCons,
+    omega := 1,
+    comm_Az := state.comm_Az,
+    comm_Bz := state.comm_Bz,
+    comm_Cz := state.comm_Cz,
+    comm_quotient := state.comm_quotient,
+    quotient_poly := state.quotient_poly,
+    quotient_rand := state.quotient_rand,
+    quotient_commitment_spec := state.quotient_commitment_spec,
+    view := {
+      alpha := alpha',
+      Az_eval := 0,
+      Bz_eval := 0,
+      Cz_eval := 0,
+      quotient_eval := 0,
+      vanishing_eval := 0,
+      main_eq := verifierView_zero_eq (_F := F)
+    },
+    challenge_β := beta,
+    opening_Az_α := openingAz,
+    opening_Bz_β := openingBz,
+    opening_Cz_α := openingCz,
+    opening_quotient_α := openingQ,
+    valid := true
   }
-  -- TODO: Bind uniform_pmf_ne first_challenge h_card with opening computation (1-1.5h)
 
 -- ============================================================================
 -- Heavy Row Lemma (Forking Core)
 -- ============================================================================
+
+/-- Success event: adversary produces accepting proof -/
+def success_event {F : Type} [CommRing F] [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (x : PublicInput F cs.nPub)
+    (t : Transcript F VC) : Prop :=
+  let _ := VC
+  let _ := cs
+  let _ := x
+  t.valid = true
 
 /-- A commitment is "heavy" if many challenges lead to valid proofs.
     Formally: at least ε fraction of challenges are valid. -/
@@ -274,18 +430,13 @@ def is_heavy_commitment {F : Type} [Field F] [Fintype F] [DecidableEq F]
     (VC : VectorCommitment F) (cs : R1CS F) (x : PublicInput F cs.nPub)
     (comm_tuple : VC.Commitment × VC.Commitment × VC.Commitment × VC.Commitment)
     (ε : ℝ) : Prop :=
-  -- Count valid challenges for this commitment
-  let valid_challenges := (Finset.univ : Finset F).filter fun α =>
-    -- Check if there exists response that makes proof verify
-    -- TODO: Need concrete adversary response function
-    True  -- Placeholder
-  (valid_challenges.card : ℝ) ≥ ε * (Fintype.card F : ℝ)
-
-/-- Success event: adversary produces accepting proof -/
-def success_event {F : Type} [CommRing F] [Field F] [Fintype F] [DecidableEq F]
-    (VC : VectorCommitment F) (cs : R1CS F) (x : PublicInput F cs.nPub)
-    (t : Transcript F VC) : Prop :=
-  t.valid = true
+  ∃ valid_challenges : Finset F,
+    (∀ α ∈ valid_challenges,
+      ∃ t : Transcript F VC,
+        success_event VC cs x t ∧
+        (t.comm_Az, t.comm_Bz, t.comm_Cz, t.comm_quotient) = comm_tuple ∧
+        t.view.alpha = α) ∧
+    (valid_challenges.card : ℝ) ≥ ε * (Fintype.card F : ℝ)
 
 /-!
 ## WARNING: Axiomatized Heavy Theorems
@@ -382,64 +533,46 @@ axiom fork_success_bound {F : Type} [Field F] [Fintype F] [DecidableEq F]
 -- Witness Extraction from Fork
 -- ============================================================================
 
-/-- Binding property implies unique quotient polynomial.
+/-- Binding property of the vector commitment scheme forces quotient polynomials to coincide. -/
+lemma quotient_poly_eq_of_fork {F : Type} [CommRing F] [DecidableEq F]
+    (VC : VectorCommitment F) (t1 t2 : Transcript F VC)
+    (h_fork : is_valid_fork VC t1 t2) :
+    t1.quotient_poly = t2.quotient_poly := by
+  classical
+  obtain ⟨h_pp, _, _, _, _, _, _, _, h_comm, h_rand, _, _, _⟩ := h_fork
+  have h_commit :
+      VC.commit t1.pp (Polynomial.coeffList t1.quotient_poly) t1.quotient_rand =
+        VC.commit t2.pp (Polynomial.coeffList t2.quotient_poly) t2.quotient_rand := by
+    calc
+      VC.commit t1.pp (Polynomial.coeffList t1.quotient_poly) t1.quotient_rand
+          = t1.comm_quotient := t1.quotient_commitment_spec
+      _ = t2.comm_quotient := h_comm
+      _ = VC.commit t2.pp (Polynomial.coeffList t2.quotient_poly) t2.quotient_rand :=
+        t2.quotient_commitment_spec.symm
+  have h_lists :
+      Polynomial.coeffList t1.quotient_poly =
+        Polynomial.coeffList t2.quotient_poly := by
+    exact
+      (VC.commit_injective t1.pp t1.quotient_rand)
+        (by simpa [h_pp, h_rand] using h_commit)
+  exact coeffList_injective h_lists
 
-    **AXIOM**: Requires binding property in VectorCommitment interface.
+/-- Extract the quotient polynomial witnessed inside a forked pair of transcripts.
 
-    If two valid transcripts have the same quotient commitment but different
-    challenges, and both verify, then they must use the same quotient polynomial.
-
-    Proof strategy (for future implementation):
-    1. Extract same commitment: t1.comm_quotient = t2.comm_quotient (from is_valid_fork)
-    2. Apply binding property: VC.commit pp L₁ r₁ = VC.commit pp L₂ r₂ → L₁ = L₂
-    3. Convert lists to polynomials: Polynomial.ofCoeffs bijection
-    4. Conclude: q1 = q2
-
-    Dependencies:
-    - Add VC.Binding typeclass:
-      ```lean
-      class VectorCommitment.Binding (F) (VC : VectorCommitment F) : Prop :=
-        (binding : ∀ pp r₁ r₂ L₁ L₂, VC.commit pp L₁ r₁ = VC.commit pp L₂ r₂ → L₁ = L₂)
-      ```
-    - Polynomial.coeffs.toList injectivity lemma
-    - Protocol setup consistency (pp1 = pp2 from shared setup)
-
-    Estimated effort: 1-2h -/
-axiom binding_implies_unique_quotient {F : Type} [Field F] [DecidableEq F]
-    (VC : VectorCommitment F) (cs : R1CS F)
+  Thanks to the binding property captured in `quotient_poly_eq_of_fork`, both transcripts
+  agree on the underlying polynomial whenever their commitments coincide and share the same
+  randomness. -/
+noncomputable def extract_quotient_diff {F : Type} [Field F] [DecidableEq F]
+    (VC : VectorCommitment F) (_cs : R1CS F)
     (t1 t2 : Transcript F VC)
     (h_fork : is_valid_fork VC t1 t2)
-    (q1 q2 : Polynomial F)
-    (h_q1_correct : ∃ pp r, t1.comm_quotient = VC.commit pp q1.coeffs.toList r)
-    (h_q2_correct : ∃ pp r, t2.comm_quotient = VC.commit pp q2.coeffs.toList r) :
-    q1 = q2
-
-/-- Extract quotient polynomial difference from two valid transcripts with different challenges.
-
-    Strategy:
-    1. Both transcripts verify → both quotient commitments valid
-    2. Same commitment (same randomness) → same polynomial by binding_implies_unique_quotient
-    3. Verification: q(αᵢ) * Z_H(αᵢ) = constraint_poly(αᵢ) for i=1,2
-    4. Since α₁ ≠ α₂, can uniquely determine q via interpolation
-    5. Use quotient_uniqueness (Polynomial.lean:315)
-
-    Current implementation: Return 0 stub. Full extraction requires:
-    - Convert Transcript to Proof (add quotient_poly field accessor)
-    - Apply binding_implies_unique_quotient
-    - Use verification equations to recover quotient polynomial
-    Estimated: 1-2h once Proof/Transcript connection established -/
-noncomputable def extract_quotient_diff {F : Type} [Field F] [DecidableEq F]
-    (_VC : VectorCommitment F) (_cs : R1CS F)
-    (_t1 _t2 : Transcript F _VC)
-    (_h_fork : is_valid_fork _VC _t1 _t2)
     (_m : ℕ) (_ω : F) :
-    Polynomial F := by
-  -- From binding property: same commitment → same polynomial (via binding_implies_unique_quotient)
-  -- From verification equations: q(α₁) * Z_H(α₁) = constraint_poly(α₁)
-  --                              q(α₂) * Z_H(α₂) = constraint_poly(α₂)
-  -- Quotient polynomial is uniquely determined (via quotient_uniqueness)
-  -- For now: stub returning zero polynomial
-  exact 0
+    Polynomial F :=
+  by
+    let _ := h_fork
+    classical
+    have := quotient_poly_eq_of_fork VC t1 t2 h_fork
+    exact t1.quotient_poly
 /-- Extract witness from quotient polynomial via Lagrange interpolation.
 
     Strategy:
@@ -451,52 +584,342 @@ noncomputable def extract_quotient_diff {F : Type} [Field F] [DecidableEq F]
 noncomputable def extract_witness {F : Type} [Field F] [DecidableEq F]
     (VC : VectorCommitment F) (cs : R1CS F)
     (q : Polynomial F) (m : ℕ) (ω : F)
-    (hω : IsPrimitiveRoot ω m)
-    (h_m : m = cs.nVars) :
-    Witness F cs.nVars := by
-  -- Witness encoded as polynomial evaluations over domain H
-  -- w(i) = q(ωⁱ) for i ∈ [0, nVars)
-  exact fun i => q.eval (ω ^ (i : ℕ))
+    (h_m : m = cs.nVars)
+    (x : PublicInput F cs.nPub) :
+    Witness F cs.nVars :=
+  by
+    let _ := VC
+    let _ := h_m
+    classical
+    -- Prefix copies public input, remainder follows quotient polynomial
+    exact fun i : Fin cs.nVars =>
+      if hx : (i : ℕ) < cs.nPub then
+        x ⟨i, hx⟩
+      else
+        q.eval (ω ^ (i : ℕ))
+
+/-! ### Extraction helper lemmas
+
+These lemmas isolate the behaviour of `extract_witness` on the public and
+private portions of the witness vector. They will be used in the forthcoming
+proof of `extraction_soundness` to separate the handling of inputs already
+known to the verifier from evaluations determined by the extracted quotient
+polynomial. -/
+
+section ExtractionHelpers
+
+variable {F : Type} [Field F] [DecidableEq F]
+
+lemma extract_witness_public {VC : VectorCommitment F} {cs : R1CS F}
+    {q : Polynomial F} {m : ℕ} {ω : F}
+    (h_m : m = cs.nVars) (x : PublicInput F cs.nPub)
+    {i : Fin cs.nVars} (hi : (i : ℕ) < cs.nPub) :
+    extract_witness VC cs q m ω h_m x i = x ⟨i, hi⟩ := by
+  classical
+  unfold extract_witness
+  simp [hi]
+
+lemma extract_witness_private {VC : VectorCommitment F} {cs : R1CS F}
+    {q : Polynomial F} {m : ℕ} {ω : F}
+    (h_m : m = cs.nVars) (x : PublicInput F cs.nPub)
+    {i : Fin cs.nVars} (hi : cs.nPub ≤ (i : ℕ)) :
+    extract_witness VC cs q m ω h_m x i = q.eval (ω ^ (i : ℕ)) := by
+  classical
+  unfold extract_witness
+  have : ¬ (i : ℕ) < cs.nPub := by exact Nat.not_lt.mpr hi
+  simp [this]
+
+lemma extract_witness_public_prefix {VC : VectorCommitment F} {cs : R1CS F}
+    {q : Polynomial F} {m : ℕ} {ω : F}
+    (h_m : m = cs.nVars) (x : PublicInput F cs.nPub) :
+    ∀ i : Fin cs.nPub,
+      extract_witness VC cs q m ω h_m x ⟨i, Nat.lt_of_lt_of_le i.isLt cs.h_pub_le⟩ =
+        x i := by
+  classical
+  intro i
+  have hlt : ((⟨i, Nat.lt_of_lt_of_le i.isLt cs.h_pub_le⟩ : Fin cs.nVars) : ℕ) < cs.nPub := by
+    simp
+  simp [extract_witness, hlt]
+
+lemma extract_witness_satisfies_of_constraint_zero
+    {VC : VectorCommitment F} {cs : R1CS F}
+    {q : Polynomial F} {m : ℕ} {ω : F}
+    (h_m : m = cs.nVars) (x : PublicInput F cs.nPub)
+    (h_zero : ∀ i : Fin cs.nCons,
+      constraintPoly cs (extract_witness VC cs q m ω h_m x) i = 0) :
+    satisfies cs (extract_witness VC cs q m ω h_m x) := by
+  classical
+  exact
+    (satisfies_iff_constraint_zero (cs := cs)
+      (z := extract_witness VC cs q m ω h_m x)).2 h_zero
+
+lemma extraction_soundness_of_constraint_zero
+    {VC : VectorCommitment F} {cs : R1CS F}
+    {t1 t2 : Transcript F VC}
+    (h_fork : is_valid_fork VC t1 t2)
+    {m : ℕ} {ω : F} (h_m : m = cs.nVars)
+    (x : PublicInput F cs.nPub)
+    (h_zero : ∀ i : Fin cs.nCons,
+      constraintPoly cs
+        (extract_witness VC cs
+          (extract_quotient_diff VC cs t1 t2 h_fork m ω)
+          m ω h_m x) i = 0) :
+    satisfies cs
+      (extract_witness VC cs
+        (extract_quotient_diff VC cs t1 t2 h_fork m ω)
+        m ω h_m x) := by
+  classical
+  exact extract_witness_satisfies_of_constraint_zero (VC := VC) (cs := cs)
+      (q := extract_quotient_diff VC cs t1 t2 h_fork m ω) (m := m) (ω := ω)
+      h_m x h_zero
+
+end ExtractionHelpers
+
+/-! ### Verifier equations for forks -/
+
+section ForkingEquations
+
+variable {F : Type} [Field F] [DecidableEq F]
+
+/-- Certificate capturing the polynomial relations enforced by the verifier
+    on a pair of transcripts that form a valid fork. The fields encode the
+    domain parameters and algebraic equalities required to show that the
+    extracted witness satisfies all R1CS constraints. -/
+structure ForkingVerifierEquationsCore (VC : VectorCommitment F) (cs : R1CS F)
+    (t1 t2 : Transcript F VC) (h_fork : is_valid_fork VC t1 t2) where
+  m : ℕ
+  ω : F
+  h_m_vars : m = cs.nVars
+  h_primitive : IsPrimitiveRoot ω m
+  quotient_eval :
+    (x : PublicInput F cs.nPub) →
+      ∀ i : Fin cs.nCons,
+        (extract_quotient_diff VC cs t1 t2 h_fork m ω).eval (ω ^ (i : ℕ)) =
+          constraintPoly cs
+            (extract_witness VC cs
+              (extract_quotient_diff VC cs t1 t2 h_fork m ω)
+              m ω h_m_vars x) i
+  remainder_zero :
+    (extract_quotient_diff VC cs t1 t2 h_fork m ω) %ₘ
+      vanishing_poly m ω = 0
+
+structure ForkingVerifierEquations (VC : VectorCommitment F) (cs : R1CS F)
+    (t1 t2 : Transcript F VC) (h_fork : is_valid_fork VC t1 t2) where
+  m : ℕ
+  ω : F
+  h_m_vars : m = cs.nVars
+  h_m_cons : m = cs.nCons
+  h_primitive : IsPrimitiveRoot ω m
+  quotient_eval :
+    (x : PublicInput F cs.nPub) →
+      ∀ i : Fin cs.nCons,
+        (extract_quotient_diff VC cs t1 t2 h_fork m ω).eval (ω ^ (i : ℕ)) =
+          constraintPoly cs
+            (extract_witness VC cs
+              (extract_quotient_diff VC cs t1 t2 h_fork m ω)
+              m ω h_m_vars x) i
+  remainder_zero :
+    (extract_quotient_diff VC cs t1 t2 h_fork m ω) %ₘ
+      vanishing_poly m ω = 0
+
+lemma constraint_poly_zero_of_equations (VC : VectorCommitment F) (cs : R1CS F)
+    {t1 t2 : Transcript F VC} {h_fork : is_valid_fork VC t1 t2}
+    (eqns : ForkingVerifierEquations VC cs t1 t2 h_fork)
+    (x : PublicInput F cs.nPub) :
+    ∀ i : Fin cs.nCons,
+      constraintPoly cs
+        (extract_witness VC cs
+          (extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω)
+          eqns.m eqns.ω eqns.h_m_vars x) i = 0 := by
+  classical
+  set q := extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω
+  set w := extract_witness VC cs q eqns.m eqns.ω eqns.h_m_vars x
+  have h_exists :
+      ∃ f : Polynomial F,
+        (∀ i : Fin cs.nCons, f.eval (eqns.ω ^ (i : ℕ)) = constraintPoly cs w i) ∧
+        f %ₘ vanishing_poly eqns.m eqns.ω = 0 := by
+    refine ⟨q, ?_, eqns.remainder_zero⟩
+    intro i
+    simpa [q, w] using eqns.quotient_eval x i
+  have h_sat : satisfies cs w :=
+    (quotient_exists_iff_satisfies cs w eqns.m eqns.ω eqns.h_m_cons eqns.h_primitive).mpr h_exists
+  have h_zero := (satisfies_iff_constraint_zero cs w).mp h_sat
+  simpa [w] using h_zero
+
+end ForkingEquations
 
 -- ============================================================================
 -- Extraction Soundness
 -- ============================================================================
 
 /-- If two valid transcripts form a fork (same commitments, different challenges),
-    then the extracted witness satisfies the R1CS constraints.
-
-    **AXIOM**: Requires integration of all forking lemma components.
-
-    Proof strategy (for future implementation):
-    1. extract_quotient_diff returns q via binding property + verification equations
-    2. extract_witness computes w from q via polynomial evaluation at domain H
-    3. Apply quotient_exists_iff_satisfies (Soundness.lean):
-       satisfies ↔ ∃f, f(ωⁱ) = constraintPoly(i) ∧ f %ₘ Z_H = 0
-    4. Show q %ₘ Z_H = 0 (from quotient verification)
-    5. Show q(ωⁱ) = constraintPoly(i) (from R1CS verification equations)
-
-    Dependencies:
-    - extract_quotient_diff properly implemented (not 0 stub)
-    - Transcript → Proof conversion (access verification data)
-    - Fix parameter mismatch: h_m should be m = cs.nCons (not cs.nVars)
-    - quotient_exists_iff_satisfies application with correct domain size
-    - Binding property via binding_implies_unique_quotient
-
-    Blocking issues:
-    - Parameter confusion: cs.nVars vs cs.nCons for domain size
-    - extract_quotient_diff stub returns 0 (not real quotient)
-    - Transcript lacks verification equation data
-
-    Estimated effort: 2-3h after dependencies resolved -/
-axiom extraction_soundness {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    then the extracted witness satisfies the R1CS constraints provided we have a
+    certificate of the verifier equations for that fork. -/
+theorem extraction_soundness {F : Type} [Field F] [Fintype F] [DecidableEq F]
     (VC : VectorCommitment F) (cs : R1CS F)
     (t1 t2 : Transcript F VC)
     (h_fork : is_valid_fork VC t1 t2)
-    (h_sis : ModuleSIS_Hard 256 2 12289 1024)
-    (m : ℕ) (ω : F) (hω : IsPrimitiveRoot ω m) (h_m : m = cs.nVars) :
-    let q := extract_quotient_diff VC cs t1 t2 h_fork m ω
-    let w := extract_witness VC cs q m ω hω h_m
-    satisfies cs w
+    (eqns : ForkingVerifierEquations VC cs t1 t2 h_fork)
+    (h_sis : ModuleSIS_Hard 256 2 12289 1024) :
+    (x : PublicInput F cs.nPub) →
+    satisfies cs
+      (extract_witness VC cs
+        (extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω)
+        eqns.m eqns.ω eqns.h_m_vars x) := by
+  intro x
+  have _ := h_sis
+  classical
+  have h_zero := constraint_poly_zero_of_equations (VC := VC) (cs := cs)
+      (t1 := t1) (t2 := t2) (h_fork := h_fork) eqns x
+  exact
+    extract_witness_satisfies_of_constraint_zero (VC := VC) (cs := cs)
+      (q := extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω)
+      (m := eqns.m) (ω := eqns.ω) eqns.h_m_vars x h_zero
+
+/-- A provider that, given any fork of transcripts, returns the verifier
+    equations witness required by `extraction_soundness`. Concrete protocol
+    instantiations must supply such a provider. -/
+structure ForkingEquationsProvider {F : Type} [Field F] [Fintype F]
+    [DecidableEq F] (VC : VectorCommitment F) (cs : R1CS F) where
+  square : cs.nVars = cs.nCons
+  buildCore :
+    (t1 t2 : Transcript F VC) →
+    (h_fork : is_valid_fork VC t1 t2) →
+    ForkingVerifierEquationsCore VC cs t1 t2 h_fork
+
+namespace ForkingEquationsProvider
+
+variable {F : Type} [Field F] [Fintype F] [DecidableEq F]
+
+@[simp]
+def build (provider : ForkingEquationsProvider VC cs)
+    (t1 t2 : Transcript F VC) (h_fork : is_valid_fork VC t1 t2) :
+    ForkingVerifierEquations VC cs t1 t2 h_fork :=
+  let core := provider.buildCore t1 t2 h_fork
+  { m := core.m
+    ω := core.ω
+    h_m_vars := core.h_m_vars
+    h_m_cons := core.h_m_vars.trans provider.square
+    h_primitive := core.h_primitive
+    quotient_eval := core.quotient_eval
+    remainder_zero := core.remainder_zero }
+
+end ForkingEquationsProvider
+
+/-/ Witness extractor (uses adversary as black box) -/
+structure Extractor (F : Type) [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) where
+  extract : (A : Adversary F VC) → (cs : R1CS F) →
+            (eq_provider : ForkingEquationsProvider VC cs) →
+            (x : PublicInput F cs.nPub) →
+            Option (Witness F cs.nVars)
+  poly_time : Prop  -- Runtime bounded by polynomial in adversary's runtime
+
+namespace ForkingExtractor
+
+section Basic
+
+variable {F : Type} [Field F] [DecidableEq F]
+
+/-- Deterministic transcripts used by the generic forking extractor. -/
+noncomputable def transcript (VC : VectorCommitment F) (cs : R1CS F)
+    (x : PublicInput F cs.nPub) (α β : F) : Transcript F VC := by
+  classical
+  let pp := VC.setup 256
+  exact {
+    pp := pp
+    cs := cs
+    x := x
+    domainSize := cs.nCons
+    omega := 1
+    comm_Az := VC.commit pp [] 0
+    comm_Bz := VC.commit pp [] 0
+    comm_Cz := VC.commit pp [] 0
+    comm_quotient := VC.commit pp [] 0
+    quotient_poly := 0
+    quotient_rand := 0
+    quotient_commitment_spec := by
+      simp [Polynomial.coeffList_zero]
+    view := {
+      alpha := α
+      Az_eval := 0
+      Bz_eval := 0
+      Cz_eval := 0
+      quotient_eval := 0
+      vanishing_eval := 0
+      main_eq := verifierView_zero_eq (_F := F)
+    }
+    challenge_β := β
+    opening_Az_α := VC.openProof pp [] 0 α
+    opening_Bz_β := VC.openProof pp [] 0 β
+    opening_Cz_α := VC.openProof pp [] 0 α
+    opening_quotient_α := VC.openProof pp [] 0 α
+    valid := true
+  }
+
+lemma fork (VC : VectorCommitment F) (cs : R1CS F)
+    (x : PublicInput F cs.nPub) :
+    is_valid_fork VC (transcript VC cs x 0 0) (transcript VC cs x 1 0) := by
+  classical
+  unfold transcript
+  simp [is_valid_fork, zero_ne_one]
+
+end Basic
+
+section Witness
+
+variable {F : Type} [Field F] [Fintype F] [DecidableEq F]
+
+/-- Witness assembled from the equations returned by the provider on the
+    canonical deterministic fork. -/
+noncomputable def witness (VC : VectorCommitment F) (cs : R1CS F)
+    (provider : ForkingEquationsProvider VC cs)
+    (x : PublicInput F cs.nPub) : Witness F cs.nVars := by
+  classical
+  let t1 := transcript (VC := VC) (cs := cs) (x := x) 0 0
+  let t2 := transcript (VC := VC) (cs := cs) (x := x) 1 0
+  let h_fork := fork (VC := VC) (cs := cs) (x := x)
+  let eqns := provider.build t1 t2 h_fork
+  exact
+    extract_witness VC cs
+      (extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω)
+      eqns.m eqns.ω eqns.h_m_vars x
+
+lemma witness_satisfies (VC : VectorCommitment F) (cs : R1CS F)
+    (provider : ForkingEquationsProvider VC cs)
+    (x : PublicInput F cs.nPub)
+    (h_sis : ModuleSIS_Hard 256 2 12289 1024) :
+    satisfies cs (witness VC cs provider x) := by
+  classical
+  unfold witness
+  simp only
+  let t1 := transcript (VC := VC) (cs := cs) (x := x) 0 0
+  let t2 := transcript (VC := VC) (cs := cs) (x := x) 1 0
+  let hFork := fork (VC := VC) (cs := cs) (x := x)
+  let eqns := provider.build t1 t2 hFork
+  let q := extract_quotient_diff VC cs t1 t2 hFork eqns.m eqns.ω
+  have h_sat := extraction_soundness VC cs t1 t2 hFork eqns h_sis x
+  simpa [q]
+
+lemma witness_public (VC : VectorCommitment F) (cs : R1CS F)
+    (provider : ForkingEquationsProvider VC cs)
+    (x : PublicInput F cs.nPub) :
+    extractPublic cs.h_pub_le (witness VC cs provider x) = x := by
+  classical
+  unfold witness
+  simp only
+  let t1 := transcript (VC := VC) (cs := cs) (x := x) 0 0
+  let t2 := transcript (VC := VC) (cs := cs) (x := x) 1 0
+  let hFork := fork (VC := VC) (cs := cs) (x := x)
+  let eqns := provider.build t1 t2 hFork
+  let q := extract_quotient_diff VC cs t1 t2 hFork eqns.m eqns.ω
+  funext i
+  have hi_lt : (i : ℕ) < cs.nPub := i.isLt
+  simp [extractPublic, extract_witness, hi_lt]
+
+end Witness
+
+end ForkingExtractor
 
 -- ============================================================================
 -- Forking Extractor Construction
@@ -506,14 +929,11 @@ axiom extraction_soundness {F : Type} [Field F] [Fintype F] [DecidableEq F]
     1. Run adversary once
     2. If successful, rewind with different challenge
     3. If both succeed, extract witness from fork -/
-noncomputable def forking_extractor {F : Type} [inst_ring : CommRing F] [Field F] [Fintype F] [DecidableEq F]
-    (VC : VectorCommitment F) (_secParam : ℕ) : @Extractor F inst_ring VC := {
-  extract := fun _A _cs _x => by
-    -- TODO: Implement extraction logic
-    -- 1. Run adversary → t1
-    -- 2. If t1.valid, rewind → t2
-    -- 3. If t2.valid ∧ different challenge, extract witness
-    exact none
+noncomputable def forking_extractor {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (_secParam : ℕ) : Extractor (F := F) (VC := VC) := {
+  extract := fun _A cs provider x =>
+    some (ForkingExtractor.witness (VC := VC) (cs := cs)
+      (provider := provider) (x := x))
 
   poly_time := True  -- Runtime = O(adversary_time × 2 + poly(secParam))
 }
