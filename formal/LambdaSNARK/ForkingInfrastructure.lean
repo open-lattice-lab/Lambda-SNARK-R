@@ -921,17 +921,21 @@ lemma constraint_numerator_eval_zero_of_equations (VC : VectorCommitment F)
   classical
   set q := extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω
   set w := extract_witness VC cs q eqns.m eqns.ω eqns.h_m_vars x
-  have h_zero_raw := constraint_poly_zero_of_equations (VC := VC) (cs := cs)
-      (t1 := t1) (t2 := t2) (h_fork := h_fork) eqns x
-  have h_zero : ∀ i : Fin cs.nCons, constraintPoly cs w i = 0 := by
-    simpa [q, w] using h_zero_raw
+  have h_vanish :=
+    (remainder_zero_iff_vanishing
+        (f := q) (m := eqns.m) (ω := eqns.ω) eqns.h_primitive).mp
+      eqns.remainder_zero
   have h_prim : IsPrimitiveRoot eqns.ω cs.nCons := by
     simpa [eqns.h_m_cons] using eqns.h_primitive
   intro i
-  have h_num :=
-    LambdaSNARK.constraintNumeratorPoly_eval_domain_of_constraint_zero (cs := cs)
-      (z := w) (ω := eqns.ω) h_prim h_zero i
-  simpa [q, w] using h_num
+  have h_match :=
+    constraint_numerator_eval_matches_quotient_of_equations (VC := VC)
+      (cs := cs) (t1 := t1) (t2 := t2) (h_fork := h_fork) eqns x i
+  have hi_lt : (i : ℕ) < eqns.m := eqns.h_m_cons.symm ▸ i.isLt
+  let hi : Fin eqns.m := ⟨(i : ℕ), hi_lt⟩
+  have h_q_zero : q.eval (eqns.ω ^ (i : ℕ)) = 0 := by
+    simpa [hi, q] using h_vanish hi
+  simpa [q, w] using h_match.trans h_q_zero
 
 lemma constraint_numerator_mod_vanishing_zero_of_equations (VC : VectorCommitment F)
     (cs : R1CS F) {t1 t2 : Transcript F VC} {h_fork : is_valid_fork VC t1 t2}
