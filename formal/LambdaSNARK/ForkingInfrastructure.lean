@@ -857,6 +857,40 @@ lemma vanishing_poly_dvd_quotient_sub_numerator_of_equations
     simp [q, w, h_zero]
   simpa [q, w] using this
 
+lemma constraint_numerator_mod_vanishing_zero_of_equations (VC : VectorCommitment F)
+    (cs : R1CS F) {t1 t2 : Transcript F VC} {h_fork : is_valid_fork VC t1 t2}
+    (eqns : ForkingVerifierEquations VC cs t1 t2 h_fork)
+    (x : PublicInput F cs.nPub) :
+    (LambdaSNARK.constraintNumeratorPoly cs
+      (extract_witness VC cs
+        (extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω)
+        eqns.m eqns.ω eqns.h_m_vars x) eqns.ω)
+        %ₘ vanishing_poly cs.nCons eqns.ω = 0 := by
+  classical
+  set q := extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω
+  set w := extract_witness VC cs q eqns.m eqns.ω eqns.h_m_vars x
+  have h_eq :=
+    constraint_quotient_sub_numerator_eq_zero_of_equations (VC := VC)
+      (cs := cs) (t1 := t1) (t2 := t2) (h_fork := h_fork) eqns x
+  have h_mod_q : q %ₘ vanishing_poly eqns.m eqns.ω = 0 := eqns.remainder_zero
+  have h_mod_congr :=
+    congrArg (fun p : Polynomial F => p %ₘ vanishing_poly eqns.m eqns.ω) h_eq
+  have h_mod_congr' :
+      q %ₘ vanishing_poly eqns.m eqns.ω =
+        (LambdaSNARK.constraintNumeratorPoly cs w eqns.ω) %ₘ
+          vanishing_poly eqns.m eqns.ω := by
+    simpa [q, w] using h_mod_congr
+  have h_mod_numer :
+      (LambdaSNARK.constraintNumeratorPoly cs w eqns.ω) %ₘ
+        vanishing_poly eqns.m eqns.ω = 0 := by
+    have := h_mod_congr' ▸ h_mod_q
+    simpa [q, w] using this
+  have h_mod_cons :
+      (LambdaSNARK.constraintNumeratorPoly cs w eqns.ω) %ₘ
+        vanishing_poly cs.nCons eqns.ω = 0 := by
+    simpa [eqns.h_m_cons] using h_mod_numer
+  simpa [q, w] using h_mod_cons
+
 lemma constraint_poly_zero_of_equations (VC : VectorCommitment F) (cs : R1CS F)
     {t1 t2 : Transcript F VC} {h_fork : is_valid_fork VC t1 t2}
     (eqns : ForkingVerifierEquations VC cs t1 t2 h_fork)
@@ -876,9 +910,6 @@ lemma constraint_poly_zero_of_equations (VC : VectorCommitment F) (cs : R1CS F)
     have h_eval_num :=
       constraint_numerator_eval_matches_quotient_of_equations (VC := VC)
         (cs := cs) (t1 := t1) (t2 := t2) (h_fork := h_fork) eqns x
-    have h_eq :=
-      constraint_quotient_sub_numerator_eq_zero_of_equations (VC := VC)
-        (cs := cs) (t1 := t1) (t2 := t2) (h_fork := h_fork) eqns x
     refine ⟨LambdaSNARK.constraintNumeratorPoly cs w eqns.ω, ?_, ?_⟩
     · intro i
       have h_num := h_eval_num i
@@ -895,14 +926,14 @@ lemma constraint_poly_zero_of_equations (VC : VectorCommitment F) (cs : R1CS F)
             constraintPoly cs w i := this.trans (by simpa [q, w] using h_q)
       simpa using this
     ·
-      have h_mod_equiv :=
-        congrArg (fun p => p %ₘ vanishing_poly eqns.m eqns.ω) h_eq
-      have h_rem := h_mod_equiv.symm.trans eqns.remainder_zero
-      have h_rem' :
+      have h_mod :=
+        constraint_numerator_mod_vanishing_zero_of_equations (VC := VC)
+          (cs := cs) (t1 := t1) (t2 := t2) (h_fork := h_fork) eqns x
+      have h_mod' :
           (LambdaSNARK.constraintNumeratorPoly cs w eqns.ω) %ₘ
               vanishing_poly eqns.m eqns.ω = 0 := by
-        simpa [q, w] using h_rem
-      simpa using h_rem'
+        simpa [q, w, eqns.h_m_cons] using h_mod
+      simpa using h_mod'
   have h_sat : satisfies cs w :=
     (quotient_exists_iff_satisfies cs w eqns.m eqns.ω eqns.h_m_cons eqns.h_primitive).mpr h_exists
   have h_zero := (satisfies_iff_constraint_zero cs w).mp h_sat
@@ -922,43 +953,17 @@ lemma constraint_numerator_eval_zero_of_equations (VC : VectorCommitment F)
   set q := extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω
   set w := extract_witness VC cs q eqns.m eqns.ω eqns.h_m_vars x
   have h_vanish :=
-    (remainder_zero_iff_vanishing
-        (f := q) (m := eqns.m) (ω := eqns.ω) eqns.h_primitive).mp
-      eqns.remainder_zero
-  have h_prim : IsPrimitiveRoot eqns.ω cs.nCons := by
-    simpa [eqns.h_m_cons] using eqns.h_primitive
+    constraint_poly_zero_of_equations (VC := VC) (cs := cs)
+      (t1 := t1) (t2 := t2) (h_fork := h_fork) eqns x
   intro i
   have h_match :=
     constraint_numerator_eval_matches_quotient_of_equations (VC := VC)
       (cs := cs) (t1 := t1) (t2 := t2) (h_fork := h_fork) eqns x i
-  have hi_lt : (i : ℕ) < eqns.m := eqns.h_m_cons.symm ▸ i.isLt
-  let hi : Fin eqns.m := ⟨(i : ℕ), hi_lt⟩
-  have h_q_zero : q.eval (eqns.ω ^ (i : ℕ)) = 0 := by
-    simpa [hi, q] using h_vanish hi
-  simpa [q, w] using h_match.trans h_q_zero
-
-lemma constraint_numerator_mod_vanishing_zero_of_equations (VC : VectorCommitment F)
-    (cs : R1CS F) {t1 t2 : Transcript F VC} {h_fork : is_valid_fork VC t1 t2}
-    (eqns : ForkingVerifierEquations VC cs t1 t2 h_fork)
-    (x : PublicInput F cs.nPub) :
-    (LambdaSNARK.constraintNumeratorPoly cs
-      (extract_witness VC cs
-        (extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω)
-        eqns.m eqns.ω eqns.h_m_vars x) eqns.ω)
-        %ₘ vanishing_poly cs.nCons eqns.ω = 0 := by
-  classical
-  set q := extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω
-  set w := extract_witness VC cs q eqns.m eqns.ω eqns.h_m_vars x
-  have h_zero_raw := constraint_poly_zero_of_equations (VC := VC) (cs := cs)
-      (t1 := t1) (t2 := t2) (h_fork := h_fork) eqns x
-  have h_zero : ∀ i : Fin cs.nCons, constraintPoly cs w i = 0 := by
-    simpa [q, w] using h_zero_raw
-  have h_prim : IsPrimitiveRoot eqns.ω cs.nCons := by
-    simpa [eqns.h_m_cons] using eqns.h_primitive
-  have h_mod :=
-    LambdaSNARK.constraintNumeratorPoly_mod_vanishing_zero_of_constraint_zero (cs := cs)
-      (z := w) (ω := eqns.ω) h_prim h_zero
-  simpa [q, w] using h_mod
+  have h_q := eqns.quotient_eval x i
+  have h_zero : constraintPoly cs w i = 0 := by
+    simpa [q, w] using h_vanish i
+  have h_num_eq := h_match.trans h_q
+  simpa [q, w] using h_num_eq.trans h_zero
 
 end ForkingEquations
 
