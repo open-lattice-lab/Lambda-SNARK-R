@@ -30,7 +30,7 @@ This file provides infrastructure for the forking lemma proof in ΛSNARK-R sound
 
 - `Transcript`: Interactive proof transcript
 - `AdversaryState`: Adversary's internal state before challenge
-- `run_adversary`: Execute adversary once
+- `run_adversary`: Execute adversary once and record commitment snapshot
 - `rewind_adversary`: Replay adversary with new challenge
 - `heavy_row_lemma`: If Pr[success] ≥ ε, then many "good" commitments exist
 - `fork_success_bound`: Pr[two valid transcripts] ≥ ε²/2
@@ -110,15 +110,6 @@ structure TranscriptView (F : Type) where
 /-- Placeholder relation used while the verifier equations are not yet formalised. -/
 def verifierView_zero_eq (_F : Type) : Prop := True
 
-/-- Probabilistic polynomial-time adversary interacting with the protocol. -/
-structure Adversary (F : Type) [CommRing F] (VC : VectorCommitment F) where
-  run :
-      (cs : R1CS F) →
-      (x : PublicInput F cs.nPub) →
-      (randomness : ℕ) →
-      Proof F VC
-  poly_time : Prop
-
 /-- Interactive proof transcript produced by the adversary and verifier. -/
 structure Transcript (F : Type) [CommRing F] (VC : VectorCommitment F) where
   pp : VC.PP
@@ -141,6 +132,18 @@ structure Transcript (F : Type) [CommRing F] (VC : VectorCommitment F) where
   opening_Cz_α : VC.Opening
   opening_quotient_α : VC.Opening
   valid : Bool
+
+/-- Evaluations and openings returned by the adversary when challenged. -/
+structure AdversaryResponse (F : Type) [CommRing F] (VC : VectorCommitment F) where
+  Az_eval : F
+  Bz_eval : F
+  Cz_eval : F
+  quotient_eval : F
+  vanishing_eval : F
+  opening_Az_α : VC.Opening
+  opening_Bz_β : VC.Opening
+  opening_Cz_α : VC.Opening
+  opening_quotient_α : VC.Opening
 
 def is_valid_fork {F : Type} [CommRing F] [DecidableEq F] (VC : VectorCommitment F)
     (t1 t2 : Transcript F VC) : Prop :=
@@ -183,15 +186,31 @@ structure AdversaryState (F : Type) [CommRing F] (VC : VectorCommitment F) where
   quotient_rand : ℕ
   quotient_commitment_spec :
     VC.commit pp (Polynomial.coeffList quotient_poly) quotient_rand = comm_quotient
+  domainSize : ℕ
+  omega : F
 
-  -- Response function: given challenge, produce openings
-  respond : F → F → (VC.Opening × VC.Opening × VC.Opening × VC.Opening)
+  -- Response function: given challenge, produce evaluations and openings
+  respond : F → F → AdversaryResponse F VC
 
 /-- Extract commitment tuple from adversary state -/
 def AdversaryState.commitments {F : Type} [CommRing F] (VC : VectorCommitment F)
     (state : AdversaryState F VC) :
     VC.Commitment × VC.Commitment × VC.Commitment × VC.Commitment :=
   (state.comm_Az, state.comm_Bz, state.comm_Cz, state.comm_quotient)
+
+/-- Probabilistic polynomial-time adversary interacting with the protocol. -/
+structure Adversary (F : Type) [CommRing F] (VC : VectorCommitment F) where
+  run :
+      (cs : R1CS F) →
+      (x : PublicInput F cs.nPub) →
+      (randomness : ℕ) →
+      Proof F VC
+  snapshot :
+      (cs : R1CS F) →
+      (x : PublicInput F cs.nPub) →
+      (randomness : ℕ) →
+      AdversaryState F VC
+  poly_time : Prop
 
 -- ============================================================================
 -- Uniform PMF over Finite Types
@@ -311,36 +330,39 @@ noncomputable def uniform_pmf_ne {α : Type*} [Fintype α] [DecidableEq α]
 -- Run Adversary (First Execution)
 -- ============================================================================
 
-/-- Execute adversary once to obtain a transcript by running the adversary,
-    packaging the resulting proof into the transcript structure. -/
-noncomputable def run_adversary {F : Type} [CommRing F] [Field F] [Fintype F] [DecidableEq F]
+/-- Execute adversary once to obtain a commitment-phase snapshot together with the
+    resulting transcript. Samples the adversary's randomness from the uniform
+    distribution, runs the adversary, and packages both the proof and the
+    state required for rewinding. -/
+noncomputable def run_adversary {F : Type} [CommRing F] [Fintype F] [DecidableEq F]
   (VC : VectorCommitment F) (cs : R1CS F)
   (_A : Adversary F VC) (x : PublicInput F cs.nPub)
-    (_secParam : ℕ) : PMF (Transcript F VC) := by
+    (_secParam : ℕ) : PMF (AdversaryState F VC × Transcript F VC) := by
   classical
   let randomnessPMF : PMF (Fin (_secParam.succ)) := uniform_pmf
   refine PMF.bind randomnessPMF ?_
   intro r
   let rand : ℕ := r
   let proof := _A.run cs x rand
-  exact PMF.pure {
-    pp := proof.pp,
+  let state := _A.snapshot cs x rand
+  exact PMF.pure (state, {
+    pp := state.pp,
     cs := cs,
     x := x,
-    domainSize := proof.domain_size,
-    omega := proof.primitive_root,
-    comm_Az := proof.comm_Az,
-    comm_Bz := proof.comm_Bz,
-    comm_Cz := proof.comm_Cz,
-    comm_quotient := proof.comm_quotient,
-    quotient_poly := proof.quotient_poly,
-    quotient_rand := proof.quotient_rand,
-    quotient_commitment_spec := proof.quotient_commitment_spec,
+    domainSize := state.domainSize,
+    omega := state.omega,
+    comm_Az := state.comm_Az,
+    comm_Bz := state.comm_Bz,
+    comm_Cz := state.comm_Cz,
+    comm_quotient := state.comm_quotient,
+    quotient_poly := state.quotient_poly,
+    quotient_rand := state.quotient_rand,
+    quotient_commitment_spec := state.quotient_commitment_spec,
     view := {
       alpha := proof.challenge_α,
-      Az_eval := 0,
-      Bz_eval := 0,
-      Cz_eval := 0,
+      Az_eval := proof.eval_Az_α,
+      Bz_eval := proof.eval_Bz_β,
+      Cz_eval := proof.eval_Cz_α,
       quotient_eval := proof.constraint_eval,
       vanishing_eval := proof.vanishing_at_α,
       main_eq := verifierView_zero_eq (_F := F)
@@ -351,7 +373,103 @@ noncomputable def run_adversary {F : Type} [CommRing F] [Field F] [Fintype F] [D
     opening_Cz_α := proof.opening_Cz_α,
     opening_quotient_α := proof.opening_quotient_α,
     valid := verify VC cs x proof
-  }
+  })
+
+/-- Distribution over commitment states produced during the first adversary run. -/
+noncomputable def run_adversary_state {F : Type} [CommRing F] [Fintype F] [DecidableEq F]
+  (VC : VectorCommitment F) (cs : R1CS F)
+  (A : Adversary F VC) (x : PublicInput F cs.nPub)
+    (secParam : ℕ) : PMF (AdversaryState F VC) :=
+  PMF.bind (run_adversary (VC := VC) (cs := cs) A x secParam) (fun sample =>
+    PMF.pure sample.1)
+
+/-- Distribution over transcripts emitted in the first adversary run. -/
+noncomputable def run_adversary_transcript {F : Type} [CommRing F] [Fintype F] [DecidableEq F]
+  (VC : VectorCommitment F) (cs : R1CS F)
+  (A : Adversary F VC) (x : PublicInput F cs.nPub)
+    (secParam : ℕ) : PMF (Transcript F VC) :=
+  PMF.bind (run_adversary (VC := VC) (cs := cs) A x secParam) (fun sample =>
+    PMF.pure sample.2)
+
+/-- Characterization of points in the support of the first adversary run. -/
+lemma mem_support_run_adversary {F : Type} [CommRing F] [Fintype F] [DecidableEq F]
+  (VC : VectorCommitment F) (cs : R1CS F)
+  (A : Adversary F VC) (x : PublicInput F cs.nPub)
+    (secParam : ℕ) {sample : AdversaryState F VC × Transcript F VC}
+    (h_mem : sample ∈ (run_adversary (VC := VC) (cs := cs) A x secParam).support) :
+    ∃ rand : Fin secParam.succ,
+      sample =
+        let randNat : ℕ := rand
+        let proof := A.run cs x randNat
+        let state := A.snapshot cs x randNat
+        (state,
+          { pp := state.pp
+            cs := cs
+            x := x
+            domainSize := state.domainSize
+            omega := state.omega
+            comm_Az := state.comm_Az
+            comm_Bz := state.comm_Bz
+            comm_Cz := state.comm_Cz
+            comm_quotient := state.comm_quotient
+            quotient_poly := state.quotient_poly
+            quotient_rand := state.quotient_rand
+            quotient_commitment_spec := state.quotient_commitment_spec
+            view := {
+              alpha := proof.challenge_α
+              Az_eval := proof.eval_Az_α
+              Bz_eval := proof.eval_Bz_β
+              Cz_eval := proof.eval_Cz_α
+              quotient_eval := proof.constraint_eval
+              vanishing_eval := proof.vanishing_at_α
+              main_eq := verifierView_zero_eq (_F := F)
+            }
+            challenge_β := proof.challenge_β
+            opening_Az_α := proof.opening_Az_α
+            opening_Bz_β := proof.opening_Bz_β
+            opening_Cz_α := proof.opening_Cz_α
+            opening_quotient_α := proof.opening_quotient_α
+            valid := verify VC cs x proof }) := by
+  classical
+  obtain ⟨rand, -, h_pure⟩ :=
+    (PMF.mem_support_bind_iff _ _ _).1 h_mem
+  have h_eq :=
+    (PMF.mem_support_pure_iff (a := by
+        classical
+        let randNat : ℕ := rand
+        let proof := A.run cs x randNat
+        let state := A.snapshot cs x randNat
+        exact (state,
+          { pp := state.pp
+            cs := cs
+            x := x
+            domainSize := state.domainSize
+            omega := state.omega
+            comm_Az := state.comm_Az
+            comm_Bz := state.comm_Bz
+            comm_Cz := state.comm_Cz
+            comm_quotient := state.comm_quotient
+            quotient_poly := state.quotient_poly
+            quotient_rand := state.quotient_rand
+            quotient_commitment_spec := state.quotient_commitment_spec
+            view := {
+              alpha := proof.challenge_α
+              Az_eval := proof.eval_Az_α
+              Bz_eval := proof.eval_Bz_β
+              Cz_eval := proof.eval_Cz_α
+              quotient_eval := proof.constraint_eval
+              vanishing_eval := proof.vanishing_at_α
+              main_eq := verifierView_zero_eq (_F := F)
+            }
+            challenge_β := proof.challenge_β
+            opening_Az_α := proof.opening_Az_α
+            opening_Bz_β := proof.opening_Bz_β
+            opening_Cz_α := proof.opening_Cz_α
+            opening_quotient_α := proof.opening_quotient_α
+            valid := verify VC cs x proof })) (a' := sample)).1 h_pure
+  exact ⟨rand, by
+    classical
+    simpa [run_adversary] using h_eq⟩
 
 -- ============================================================================
 -- Rewind Adversary (Second Execution with Different Challenge)
@@ -359,7 +477,7 @@ noncomputable def run_adversary {F : Type} [CommRing F] [Field F] [Fintype F] [D
 
 /-- Replay adversary with same commitments but different challenge.
     Core of forking lemma: reuse randomness, resample challenge. -/
-noncomputable def rewind_adversary {F : Type} [CommRing F] [Field F] [Fintype F] [DecidableEq F]
+noncomputable def rewind_adversary {F : Type} [CommRing F] [Fintype F] [DecidableEq F]
   (VC : VectorCommitment F) (cs : R1CS F)
   (_A : Adversary F VC) (x : PublicInput F cs.nPub)
   (state : AdversaryState F VC)
@@ -372,14 +490,13 @@ noncomputable def rewind_adversary {F : Type} [CommRing F] [Field F] [Fintype F]
   intro alpha'
   refine PMF.bind betaPMF ?_
   intro beta
-  rcases state.respond alpha' beta with
-    ⟨openingAz, openingBz, openingCz, openingQ⟩
+  let response := state.respond alpha' beta
   exact PMF.pure {
     pp := state.pp,
     cs := cs,
     x := x,
-    domainSize := cs.nCons,
-    omega := 1,
+    domainSize := state.domainSize,
+    omega := state.omega,
     comm_Az := state.comm_Az,
     comm_Bz := state.comm_Bz,
     comm_Cz := state.comm_Cz,
@@ -389,20 +506,290 @@ noncomputable def rewind_adversary {F : Type} [CommRing F] [Field F] [Fintype F]
     quotient_commitment_spec := state.quotient_commitment_spec,
     view := {
       alpha := alpha',
-      Az_eval := 0,
-      Bz_eval := 0,
-      Cz_eval := 0,
-      quotient_eval := 0,
-      vanishing_eval := 0,
+      Az_eval := response.Az_eval,
+      Bz_eval := response.Bz_eval,
+      Cz_eval := response.Cz_eval,
+      quotient_eval := response.quotient_eval,
+      vanishing_eval := response.vanishing_eval,
       main_eq := verifierView_zero_eq (_F := F)
     },
     challenge_β := beta,
-    opening_Az_α := openingAz,
-    opening_Bz_β := openingBz,
-    opening_Cz_α := openingCz,
-    opening_quotient_α := openingQ,
+    opening_Az_α := response.opening_Az_α,
+    opening_Bz_β := response.opening_Bz_β,
+    opening_Cz_α := response.opening_Cz_α,
+    opening_quotient_α := response.opening_quotient_α,
     valid := true
   }
+
+/-- Unpack an element of the rewound adversary distribution. -/
+lemma mem_support_rewind_adversary {F : Type} [CommRing F] [Fintype F] [DecidableEq F]
+  (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+  (x : PublicInput F cs.nPub) (state : AdversaryState F VC)
+  (first_challenge : F) (h_card : Fintype.card F ≥ 2)
+  {t : Transcript F VC}
+  (h_mem : t ∈ (rewind_adversary (VC := VC) (cs := cs) A x state first_challenge h_card).support) :
+  ∃ alpha beta,
+    alpha ≠ first_challenge ∧
+    t =
+      let response := state.respond alpha beta
+      { pp := state.pp
+        cs := cs
+        x := x
+        domainSize := state.domainSize
+        omega := state.omega
+        comm_Az := state.comm_Az
+        comm_Bz := state.comm_Bz
+        comm_Cz := state.comm_Cz
+        comm_quotient := state.comm_quotient
+        quotient_poly := state.quotient_poly
+        quotient_rand := state.quotient_rand
+        quotient_commitment_spec := state.quotient_commitment_spec
+        view := {
+          alpha := alpha
+          Az_eval := response.Az_eval
+          Bz_eval := response.Bz_eval
+          Cz_eval := response.Cz_eval
+          quotient_eval := response.quotient_eval
+          vanishing_eval := response.vanishing_eval
+          main_eq := verifierView_zero_eq (_F := F)
+        }
+        challenge_β := beta
+        opening_Az_α := response.opening_Az_α
+        opening_Bz_β := response.opening_Bz_β
+        opening_Cz_α := response.opening_Cz_α
+        opening_quotient_α := response.opening_quotient_α
+        valid := true } := by
+  classical
+  obtain ⟨alpha, h_alpha, h_bind⟩ :=
+    (PMF.mem_support_bind_iff _ _ _).1 h_mem
+  obtain ⟨beta, -, h_pure⟩ :=
+    (PMF.mem_support_bind_iff _ _ _).1 h_bind
+  have h_t_eq :=
+    (PMF.mem_support_pure_iff (a := by
+        classical
+        let response := state.respond alpha beta
+        exact {
+          pp := state.pp
+          cs := cs
+          x := x
+          domainSize := state.domainSize
+          omega := state.omega
+          comm_Az := state.comm_Az
+          comm_Bz := state.comm_Bz
+          comm_Cz := state.comm_Cz
+          comm_quotient := state.comm_quotient
+          quotient_poly := state.quotient_poly
+          quotient_rand := state.quotient_rand
+          quotient_commitment_spec := state.quotient_commitment_spec
+          view := {
+            alpha := alpha
+            Az_eval := response.Az_eval
+            Bz_eval := response.Bz_eval
+            Cz_eval := response.Cz_eval
+            quotient_eval := response.quotient_eval
+            vanishing_eval := response.vanishing_eval
+            main_eq := verifierView_zero_eq (_F := F)
+          }
+          challenge_β := beta
+          opening_Az_α := response.opening_Az_α
+          opening_Bz_β := response.opening_Bz_β
+          opening_Cz_α := response.opening_Cz_α
+          opening_quotient_α := response.opening_quotient_α
+          valid := true
+        }) (a' := t)).1 h_pure
+  have h_alpha_ne : alpha ≠ first_challenge := by
+    intro h_eq
+    subst h_eq
+    have h_mass_ne :=
+      (PMF.mem_support_iff (p := uniform_pmf_ne alpha h_card) (a := alpha)).1 h_alpha
+    have h_mass_zero : (uniform_pmf_ne alpha h_card) alpha = 0 := by
+      classical
+      change (if alpha = alpha then 0 else ((Fintype.card F - 1) : ENNReal)⁻¹) = 0
+      simp
+    exact h_mass_ne h_mass_zero
+  refine ⟨alpha, beta, h_alpha_ne, ?_⟩
+  simpa [rewind_adversary] using h_t_eq
+/-- Every transcript sampled from `rewind_adversary` has a challenge distinct from the
+    original `first_challenge`. -/
+lemma rewind_adversary_support_alpha_ne {F : Type} [CommRing F] [Fintype F] [DecidableEq F]
+  (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+  (x : PublicInput F cs.nPub) (state : AdversaryState F VC)
+  (first_challenge : F) (h_card : Fintype.card F ≥ 2)
+  {t₂ : Transcript F VC}
+  (h_mem : t₂ ∈ (rewind_adversary (VC := VC) (cs := cs) A x state first_challenge h_card).support) :
+  t₂.view.alpha ≠ first_challenge := by
+  classical
+  obtain ⟨α, hα_mem, hβ_mem⟩ :=
+    (PMF.mem_support_bind_iff _ _ _).1 h_mem
+  obtain ⟨β, hβ_support, h_pure⟩ :=
+    (PMF.mem_support_bind_iff _ _ _).1 hβ_mem
+  have hα_ne : α ≠ first_challenge := by
+    intro h_eq
+    have h_mass_ne :=
+      (PMF.mem_support_iff (p := uniform_pmf_ne first_challenge h_card) (a := α)).1 hα_mem
+    have h_mass_zero : (uniform_pmf_ne first_challenge h_card) α = 0 := by
+      change (if α = first_challenge then 0 else ((Fintype.card F - 1) : ENNReal)⁻¹) = 0
+      simp [h_eq]
+    exact h_mass_ne h_mass_zero
+  let response := state.respond α β
+  let forked : Transcript F VC :=
+    { pp := state.pp,
+      cs := cs,
+      x := x,
+      domainSize := state.domainSize,
+      omega := state.omega,
+      comm_Az := state.comm_Az,
+      comm_Bz := state.comm_Bz,
+      comm_Cz := state.comm_Cz,
+      comm_quotient := state.comm_quotient,
+      quotient_poly := state.quotient_poly,
+      quotient_rand := state.quotient_rand,
+      quotient_commitment_spec := state.quotient_commitment_spec,
+      view := {
+        alpha := α,
+        Az_eval := response.Az_eval,
+        Bz_eval := response.Bz_eval,
+        Cz_eval := response.Cz_eval,
+        quotient_eval := response.quotient_eval,
+        vanishing_eval := response.vanishing_eval,
+        main_eq := verifierView_zero_eq (_F := F)
+      },
+      challenge_β := β,
+      opening_Az_α := response.opening_Az_α,
+      opening_Bz_β := response.opening_Bz_β,
+      opening_Cz_α := response.opening_Cz_α,
+      opening_quotient_α := response.opening_quotient_α,
+      valid := true }
+  have h_t₂_eq :=
+    (PMF.mem_support_pure_iff (a := forked) (a' := t₂)).1 h_pure
+  have h_alpha_eq : t₂.view.alpha = α :=
+    congrArg (fun t : Transcript F VC => t.view.alpha) h_t₂_eq
+  exact h_alpha_eq ▸ hα_ne
+
+/-- Sample commitment snapshot together with two transcripts forming a fork. -/
+noncomputable def fork_state_and_transcripts {F : Type} [CommRing F] [Fintype F] [DecidableEq F]
+  (VC : VectorCommitment F) (cs : R1CS F)
+  (A : Adversary F VC) (x : PublicInput F cs.nPub)
+    (secParam : ℕ) (h_card : Fintype.card F ≥ 2) :
+    PMF (AdversaryState F VC × Transcript F VC × Transcript F VC) := by
+  classical
+  let firstRun := run_adversary (VC := VC) (cs := cs) A x secParam
+  refine PMF.bind firstRun ?_
+  intro sample
+  let state := sample.1
+  let t1 := sample.2
+  let rewind := rewind_adversary (VC := VC) (cs := cs) A x state t1.view.alpha h_card
+  refine PMF.bind rewind ?_
+  intro t2
+  exact PMF.pure (state, t1, t2)
+
+/-- In the forked triple, the two transcripts always carry distinct challenges. -/
+lemma fork_state_and_transcripts_support_alpha_ne {F : Type} [CommRing F] [Fintype F] [DecidableEq F]
+  (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+  (x : PublicInput F cs.nPub) (secParam : ℕ) (h_card : Fintype.card F ≥ 2)
+  {triple : AdversaryState F VC × Transcript F VC × Transcript F VC}
+  (h_mem : triple ∈ (fork_state_and_transcripts (VC := VC) (cs := cs) A x secParam h_card).support) :
+  triple.2.1.view.alpha ≠ triple.2.2.view.alpha := by
+  classical
+  obtain ⟨sample, h_sample, h_bind⟩ :=
+    (PMF.mem_support_bind_iff _ _ _).1 h_mem
+  obtain ⟨t₂, h_rewind, h_pure⟩ :=
+    (PMF.mem_support_bind_iff _ _ _).1 h_bind
+  have h_triple_eq :=
+    (PMF.mem_support_pure_iff (a := (sample.1, sample.2, t₂)) (a' := triple)).1 h_pure
+  cases h_triple_eq
+  have h_ne :=
+    rewind_adversary_support_alpha_ne (VC := VC) (cs := cs) (A := A) (x := x)
+      (state := sample.1) (first_challenge := sample.2.view.alpha) h_card h_rewind
+  simpa [ne_comm] using h_ne
+
+/-- If the first transcript in the fork triple is accepting, then the sampled triple forms
+    a valid fork. -/
+lemma fork_state_and_transcripts_support_is_valid_fork
+  {F : Type} [CommRing F] [Fintype F] [DecidableEq F]
+  (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+  (x : PublicInput F cs.nPub) (secParam : ℕ) (h_card : Fintype.card F ≥ 2)
+  {triple : AdversaryState F VC × Transcript F VC × Transcript F VC}
+  (h_mem : triple ∈ (fork_state_and_transcripts (VC := VC) (cs := cs) A x secParam h_card).support)
+  (h_valid : triple.2.1.valid = true) :
+  is_valid_fork VC triple.2.1 triple.2.2 := by
+  classical
+  obtain ⟨sample, h_sample, h_bind⟩ :=
+    (PMF.mem_support_bind_iff _ _ _).1 h_mem
+  obtain ⟨t₂, h_rewind, h_pure⟩ :=
+    (PMF.mem_support_bind_iff _ _ _).1 h_bind
+  have h_triple_eq :=
+    (PMF.mem_support_pure_iff (a := (sample.1, sample.2, t₂)) (a' := triple)).1 h_pure
+  cases h_triple_eq
+  have h_sample_valid : sample.2.valid = true := by
+    simpa using h_valid
+  obtain ⟨rand, h_sample_struct⟩ :=
+    mem_support_run_adversary (VC := VC) (cs := cs) (A := A) (x := x)
+      (secParam := secParam) h_sample
+  obtain ⟨α, β, h_alpha_ne, h_t₂_struct⟩ :=
+    mem_support_rewind_adversary (VC := VC) (cs := cs) (A := A) (x := x)
+      (state := sample.1) (first_challenge := sample.2.view.alpha) h_card
+      (h_mem := h_rewind)
+  have h_t₂_valid : t₂.valid = true := by
+    simp [h_t₂_struct]
+  have h_ne : sample.2.view.alpha ≠ t₂.view.alpha := by
+    simpa [h_t₂_struct, ne_comm] using h_alpha_ne
+  subst h_sample_struct
+  subst h_t₂_struct
+  have h_sample_valid' : verify VC cs x (A.run cs x ↑rand) = true := by
+    simpa using h_sample_valid
+  simp [is_valid_fork, h_ne, h_sample_valid']
+
+/-- Sample two transcripts forming a fork by running the adversary once and then
+    rewinding it with a freshly sampled challenge distinct from the original. -/
+noncomputable def fork_transcripts {F : Type} [CommRing F] [Fintype F] [DecidableEq F]
+  (VC : VectorCommitment F) (cs : R1CS F)
+  (A : Adversary F VC) (x : PublicInput F cs.nPub)
+    (secParam : ℕ) (h_card : Fintype.card F ≥ 2) :
+    PMF (Transcript F VC × Transcript F VC) := by
+  classical
+  let triples := fork_state_and_transcripts (VC := VC) (cs := cs) A x secParam h_card
+  refine PMF.bind triples ?_
+  intro triple
+  exact PMF.pure (triple.2.1, triple.2.2)
+
+/-- The forked transcript pair always contains distinct challenges. -/
+lemma fork_transcripts_support_alpha_ne {F : Type} [CommRing F] [Fintype F] [DecidableEq F]
+  (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+  (x : PublicInput F cs.nPub) (secParam : ℕ) (h_card : Fintype.card F ≥ 2)
+  {pair : Transcript F VC × Transcript F VC}
+  (h_mem : pair ∈ (fork_transcripts (VC := VC) (cs := cs) A x secParam h_card).support) :
+  pair.1.view.alpha ≠ pair.2.view.alpha := by
+  classical
+  obtain ⟨triple, h_triple, h_pure⟩ :=
+    (PMF.mem_support_bind_iff _ _ _).1 h_mem
+  have h_pair_eq :=
+    (PMF.mem_support_pure_iff (a := (triple.2.1, triple.2.2)) (a' := pair)).1 h_pure
+  cases h_pair_eq
+  have h_ne :=
+    fork_state_and_transcripts_support_alpha_ne (VC := VC) (cs := cs) (A := A)
+      (x := x) (secParam := secParam) h_card h_triple
+  simpa using h_ne
+
+/-- If the first transcript in the forked pair is accepting, the pair forms a valid fork. -/
+lemma fork_transcripts_support_is_valid_fork
+  {F : Type} [CommRing F] [Fintype F] [DecidableEq F]
+  (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+  (x : PublicInput F cs.nPub) (secParam : ℕ) (h_card : Fintype.card F ≥ 2)
+  {pair : Transcript F VC × Transcript F VC}
+  (h_mem : pair ∈ (fork_transcripts (VC := VC) (cs := cs) A x secParam h_card).support)
+  (h_valid : pair.1.valid = true) :
+  is_valid_fork VC pair.1 pair.2 := by
+  classical
+  obtain ⟨triple, h_triple, h_pure⟩ :=
+    (PMF.mem_support_bind_iff _ _ _).1 h_mem
+  have h_pair_eq :=
+    (PMF.mem_support_pure_iff (a := (triple.2.1, triple.2.2)) (a' := pair)).1 h_pure
+  cases h_pair_eq
+  have h_valid' : triple.2.1.valid = true := by
+    simpa using h_valid
+  exact fork_state_and_transcripts_support_is_valid_fork (VC := VC) (cs := cs) (A := A)
+    (x := x) (secParam := secParam) h_card h_triple h_valid'
 
 -- ============================================================================
 -- Heavy Row Lemma (Forking Core)
@@ -416,6 +803,53 @@ def success_event {F : Type} [CommRing F] [Field F] [Fintype F] [DecidableEq F]
   let _ := cs
   let _ := x
   t.valid = true
+
+/-- Specialized version phrased via `success_event`. -/
+lemma fork_transcripts_support_success_is_valid_fork
+  {F : Type} [Field F] [Fintype F] [DecidableEq F]
+  (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+  (x : PublicInput F cs.nPub) (secParam : ℕ) (h_card : Fintype.card F ≥ 2)
+  {pair : Transcript F VC × Transcript F VC}
+  (h_mem : pair ∈ (fork_transcripts (VC := VC) (cs := cs) A x secParam h_card).support)
+  (h_success : success_event VC cs x pair.1) :
+  is_valid_fork VC pair.1 pair.2 := by
+  classical
+  have h_valid : pair.1.valid = true := by
+    simpa [success_event] using h_success
+  exact fork_transcripts_support_is_valid_fork (VC := VC) (cs := cs) (A := A)
+    (x := x) (secParam := secParam) h_card h_mem h_valid
+
+/-- Forking a successful transcript yields another successful transcript. -/
+lemma fork_transcripts_support_success_second
+  {F : Type} [Field F] [Fintype F] [DecidableEq F]
+  (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+  (x : PublicInput F cs.nPub) (secParam : ℕ) (h_card : Fintype.card F ≥ 2)
+  {pair : Transcript F VC × Transcript F VC}
+  (h_mem : pair ∈ (fork_transcripts (VC := VC) (cs := cs) A x secParam h_card).support)
+  (h_success : success_event VC cs x pair.1) :
+  success_event VC cs x pair.2 := by
+  classical
+  have h_fork :=
+    fork_transcripts_support_success_is_valid_fork (VC := VC) (cs := cs) (A := A)
+      (x := x) (secParam := secParam) h_card h_mem h_success
+  obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, h_valid₂⟩ := h_fork
+  simpa [success_event] using h_valid₂
+
+/-- Any forked transcript pair sampled after a successful run remains
+    successful and forms a valid fork. -/
+lemma fork_transcripts_support_success_event
+  {F : Type} [Field F] [Fintype F] [DecidableEq F]
+  (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+  (x : PublicInput F cs.nPub) (secParam : ℕ) (h_card : Fintype.card F ≥ 2)
+  {pair : Transcript F VC × Transcript F VC}
+  (h_mem : pair ∈ (fork_transcripts (VC := VC) (cs := cs) A x secParam h_card).support)
+  (h_success : success_event VC cs x pair.1) :
+  success_event VC cs x pair.2 ∧ is_valid_fork VC pair.1 pair.2 := by
+  refine ⟨?_, ?_⟩
+  · exact fork_transcripts_support_success_second (VC := VC) (cs := cs)
+      (A := A) (x := x) (secParam := secParam) h_card h_mem h_success
+  · exact fork_transcripts_support_success_is_valid_fork (VC := VC) (cs := cs)
+      (A := A) (x := x) (secParam := secParam) h_card h_mem h_success
 
 /-- A commitment is "heavy" if many challenges lead to valid proofs.
     Formally: at least ε fraction of challenges are valid. -/

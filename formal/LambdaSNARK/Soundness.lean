@@ -42,6 +42,7 @@ extract a valid witness w satisfying the R1CS constraints.
 namespace LambdaSNARK
 
 open BigOperators Polynomial
+open LambdaSNARK
 
 -- ============================================================================
 -- Forking Lemma (Main Extraction Theorem)
@@ -105,11 +106,20 @@ lemma fork_event_probability_lower_bound {F : Type} [Field F] [Fintype F] [Decid
       quotient_rand := 0
       quotient_commitment_spec := by
         simp [Polynomial.coeffList_zero, pp]
-      respond := fun _ _ =>
-        (VC.openProof pp [] 0 0,
-          VC.openProof pp [] 0 0,
-          VC.openProof pp [] 0 0,
-          VC.openProof pp [] 0 0) }
+      domainSize := cs.nCons
+      omega := 1
+      respond := fun α β => by
+        refine {
+          Az_eval := (0 : F)
+          Bz_eval := 0
+          Cz_eval := 0
+          quotient_eval := 0
+          vanishing_eval := 0
+          opening_Az_α := VC.openProof pp [] 0 α
+          opening_Bz_β := VC.openProof pp [] 0 β
+          opening_Cz_α := VC.openProof pp [] 0 α
+          opening_quotient_α := VC.openProof pp [] 0 α
+        } }
   let valid_challenges : Finset F := (Finset.univ : Finset F)
   let total_pairs := Nat.choose (Fintype.card F) 2
   let valid_pairs := Nat.choose valid_challenges.card 2
@@ -137,7 +147,7 @@ lemma fork_event_produces_transcripts {F : Type} [Field F] [Fintype F] [Decidabl
   let t2 := ForkingExtractor.transcript (VC := VC) (cs := cs) (x := x) 1 0
   refine ⟨t1, t2, ForkingExtractor.fork (VC := VC) (cs := cs) (x := x)⟩
 
--- ============================================================================
+-- ==========================================================================
 -- Schwartz-Zippel Lemma
 -- ============================================================================
 
