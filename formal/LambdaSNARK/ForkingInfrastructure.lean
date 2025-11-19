@@ -1023,7 +1023,7 @@ axiom heavy_row_lemma {F : Type} [Field F] [Fintype F] [DecidableEq F]
     (A : Adversary F VC) (x : PublicInput F cs.nPub)
     (ε : ℝ) (secParam : ℕ)
     (h_ε_pos : 0 < ε)
-    (h_ε_bound : ε ≤ 1)
+    (_h_ε_bound : ε ≤ 1)
     (h_field_size : (Fintype.card F : ℝ) > 0)
     (h_success : True)  -- TODO: formalize Pr[verify = true] ≥ ε
     :
@@ -1036,39 +1036,92 @@ axiom heavy_row_lemma {F : Type} [Field F] [Fintype F] [DecidableEq F]
 -- ============================================================================
 
 /-- Given a "heavy" commitment (many valid challenges),
-    the probability of obtaining two distinct valid challenges is ≥ ε²/2.
+  the probability of obtaining two distinct valid challenges is ≥ ε²/2.
 
-    **AXIOM**: Requires combinatorial binomial coefficient casting proofs.
-
-    Proof strategy (for future implementation):
-    Combinatorial version:
-    - Valid challenges: V ⊆ F with |V| ≥ ε|F|
-    - C(|V|, 2) / C(|F|, 2) ≥ (ε|F|)(ε|F|-1) / (|F|(|F|-1)) ≈ ε²/2
-
-    Blocking issue: Nat.cast with division requires careful lemma chaining.
-    Multiple approaches attempted (Nat.cast_div, mul_div_assoc, direct expansion).
-    All blocked by type coercion and casting interaction with division.
-
-    Recommended path forward:
-    - Helper lemma: nat_choose_cast (n : ℕ) : (n.choose 2 : ℝ) = n * (n-1) / 2
-    - Prove separately with careful Nat/ℝ casting isolation
-    - Then use in main theorem
-
-    Estimated effort: 3-4h with dedicated helper lemmas -/
-axiom fork_success_bound {F : Type} [Field F] [Fintype F] [DecidableEq F]
+  This lemma converts the combinatorial inequality on binomial coefficients
+  into a real-valued inequality.  The helper lemmas `choose_two_cast` and
+  `eps_mul_sub_one_over_ge` take care of the arithmetic manipulations. -/
+lemma fork_success_bound {F : Type} [Field F] [Fintype F] [DecidableEq F]
     (VC : VectorCommitment F)
     (_state : AdversaryState F VC)
     (valid_challenges : Finset F)
     (ε : ℝ)
     (h_heavy : (valid_challenges.card : ℝ) ≥ ε * (Fintype.card F : ℝ))
     (h_ε_pos : 0 < ε)
-    (h_ε_bound : ε ≤ 1)
+    (_h_ε_bound : ε ≤ 1)
     (h_field_size : (Fintype.card F : ℝ) ≥ 2)
     (h_valid_nonempty : valid_challenges.card ≥ 2)
     :
     let total_pairs := Nat.choose (Fintype.card F) 2
     let valid_pairs := Nat.choose valid_challenges.card 2
-    (valid_pairs : ℝ) / (total_pairs : ℝ) ≥ ε^2 / 2 - 1 / (Fintype.card F : ℝ)
+    (valid_pairs : ℝ) / (total_pairs : ℝ) ≥ ε^2 / 2 - 1 / (Fintype.card F : ℝ) := by
+  classical
+  set n : ℝ := (Fintype.card F : ℝ)
+  set m : ℝ := (valid_challenges.card : ℝ)
+  let total_pairs := Nat.choose (Fintype.card F) 2
+  let valid_pairs := Nat.choose valid_challenges.card 2
+  change (valid_pairs : ℝ) / (total_pairs : ℝ) ≥ ε ^ 2 / 2 - 1 / n
+  have hn_two : (2 : ℝ) ≤ n := by
+    simpa [n] using h_field_size
+  have hn_pos : 0 < n := lt_of_lt_of_le (by norm_num : (0 : ℝ) < 2) hn_two
+  have hn_ne : n ≠ 0 := ne_of_gt hn_pos
+  have hn_gt_one : (1 : ℝ) < n := lt_of_lt_of_le (by norm_num : (1 : ℝ) < 2) hn_two
+  have hn_ne_one : n ≠ 1 := ne_of_gt hn_gt_one
+  have hn_sub_ne : n - 1 ≠ 0 := sub_ne_zero.mpr (ne_of_gt hn_gt_one)
+  have hm_two : (2 : ℝ) ≤ m := by
+    simpa [m] using h_valid_nonempty
+  have hm_pos : 0 < m := lt_of_lt_of_le (by norm_num : (0 : ℝ) < 2) hm_two
+  have hm_ne : m ≠ 0 := ne_of_gt hm_pos
+  have hm_gt_one : (1 : ℝ) < m := lt_of_lt_of_le (by norm_num : (1 : ℝ) < 2) hm_two
+  have hm_sub_ne : m - 1 ≠ 0 := sub_ne_zero.mpr (ne_of_gt hm_gt_one)
+  have hm_ge_one : 1 ≤ m := le_of_lt hm_gt_one
+  have h_inv_nonneg : 0 ≤ 1 / n := by
+    have := inv_pos.mpr hn_pos
+    exact le_of_lt (by simpa [one_div] using this)
+  have h_eps_le : ε ≤ m / n := by
+    have h_mul : ε * n ≤ m := by
+      simpa [n, m, mul_comm] using h_heavy
+    have := mul_le_mul_of_nonneg_left h_mul h_inv_nonneg
+    simpa [div_eq_mul_inv, n, m, hn_ne, mul_comm, mul_left_comm, mul_assoc] using this
+  have h_mul_cancel : (m / n) * n = m := by
+    simp [div_eq_mul_inv, n, hn_ne]
+  have h_prod : 1 ≤ (m / n) * n := by
+    simpa [h_mul_cancel] using hm_ge_one
+  have h_eps_bound' :=
+    eps_mul_sub_one_over_ge (ε := m / n) (n := n) hn_two (by simpa [h_mul_cancel] using h_prod)
+  have h_eps_bound : (m / n) * (m - 1) / (n - 1) ≥ (m / n) ^ 2 / 2 - 1 / n := by
+    simpa [h_mul_cancel] using h_eps_bound'
+  have h_ratio_eq :
+      (valid_pairs : ℝ) / (total_pairs : ℝ)
+        = (m / n) * (m - 1) / (n - 1) := by
+    have h_two_ne : (2 : ℝ) ≠ 0 := by norm_num
+    have h_valid_cast : (valid_pairs : ℝ) = m * (m - 1) / 2 := by
+      simp [valid_pairs, m, choose_two_cast]
+    have h_total_cast : (total_pairs : ℝ) = n * (n - 1) / 2 := by
+      simp [total_pairs, n, choose_two_cast]
+    have h_main :
+        (m * (m - 1) / 2) / (n * (n - 1) / 2)
+          = (m / n) * (m - 1) / (n - 1) := by
+      field_simp [hn_ne, hn_sub_ne, hm_ne, hm_sub_ne, h_two_ne]
+    simpa [h_valid_cast, h_total_cast] using h_main
+  have h_ratio_lower :
+      (valid_pairs : ℝ) / (total_pairs : ℝ) ≥ (m / n) ^ 2 / 2 - 1 / n := by
+    simpa [h_ratio_eq] using h_eps_bound
+  have h_eps_nonneg : 0 ≤ ε := le_of_lt h_ε_pos
+  have h_ratio_nonneg : 0 ≤ m / n :=
+    div_nonneg (le_of_lt hm_pos) (le_of_lt hn_pos)
+  have h_abs_le : |ε| ≤ |m / n| := by
+    simpa [abs_of_nonneg h_eps_nonneg, abs_of_nonneg h_ratio_nonneg] using h_eps_le
+  have h_sq_le : ε ^ 2 ≤ (m / n) ^ 2 := sq_le_sq.mpr h_abs_le
+  have h_inv_two_nonneg : 0 ≤ (1 / (2 : ℝ)) := by norm_num
+  have h_sq_half_le : ε ^ 2 / 2 ≤ (m / n) ^ 2 / 2 := by
+    have := mul_le_mul_of_nonneg_right h_sq_le h_inv_two_nonneg
+    simpa [div_eq_mul_inv] using this
+  have h_step : ε ^ 2 / 2 - 1 / n ≤ (m / n) ^ 2 / 2 - 1 / n :=
+    sub_le_sub_right h_sq_half_le (1 / n)
+  have h_final : ε ^ 2 / 2 - 1 / n ≤ (valid_pairs : ℝ) / (total_pairs : ℝ) :=
+    le_trans h_step h_ratio_lower
+  simpa [n] using h_final
 
 -- ============================================================================
 -- Witness Extraction from Fork
