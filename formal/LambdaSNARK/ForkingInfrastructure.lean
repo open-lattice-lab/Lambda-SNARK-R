@@ -74,6 +74,100 @@ lemma choose_two_mono {m n : ℕ} (h : m ≤ n) :
     (Nat.choose m 2 : ℝ) ≤ Nat.choose n 2 := by
   exact_mod_cast (Nat.choose_le_choose (c := 2) h)
 
+lemma two_mul_sub_three_add_inv_nonneg {n : ℝ} (hn_two : (2 : ℝ) ≤ n) :
+    0 ≤ 2 * n - 3 + 1 / n := by
+  have hn_pos : 0 < n := lt_of_lt_of_le (show (0 : ℝ) < 2 by norm_num) hn_two
+  have hn_ne : n ≠ 0 := ne_of_gt hn_pos
+  have h_num_nonneg : 0 ≤ (2 * n - 1) * (n - 1) := by
+    have h_left : 0 ≤ 2 * n - 1 := by
+      have h_sum : (4 : ℝ) ≤ n + n := by
+        have := add_le_add hn_two hn_two
+        convert this using 1
+        · norm_num
+      have h_two_n_ge_four : (4 : ℝ) ≤ 2 * n := by
+        simpa [two_mul, add_comm] using h_sum
+      have h_two_n_ge_one : (1 : ℝ) ≤ 2 * n := le_trans (by norm_num) h_two_n_ge_four
+      exact sub_nonneg.mpr h_two_n_ge_one
+    have h_right : 0 ≤ n - 1 :=
+      sub_nonneg.mpr ((show (1 : ℝ) ≤ 2 by norm_num).trans hn_two)
+    exact mul_nonneg h_left h_right
+  have h_div : 0 ≤ ((2 * n - 1) * (n - 1)) / n :=
+    div_nonneg h_num_nonneg (le_of_lt hn_pos)
+  have h_cast :
+      ((2 * n - 1) * (n - 1)) / n = 2 * n - 3 + 1 / n := by
+    field_simp [hn_ne, one_div]; ring
+  simpa [h_cast] using h_div
+
+lemma eps_mul_sub_one_over_ge {ε n : ℝ}
+    (hn_two : (2 : ℝ) ≤ n) (h_prod : 1 ≤ ε * n) :
+    ε * (ε * n - 1) / (n - 1) ≥ ε ^ 2 / 2 - 1 / n := by
+  classical
+  have hn_pos : 0 < n := lt_of_lt_of_le (show (0 : ℝ) < 2 by norm_num) hn_two
+  have h_one_lt : (1 : ℝ) < n := lt_of_lt_of_le (show (1 : ℝ) < 2 by norm_num) hn_two
+  have hn_sub_pos : 0 < n - 1 := sub_pos.mpr h_one_lt
+  have hn_ne : n ≠ 0 := ne_of_gt hn_pos
+  have hn_sub_ne : n - 1 ≠ 0 := sub_ne_zero.mpr (ne_of_gt h_one_lt)
+  have h_eps_lower : 1 / n ≤ ε := by
+    have h_inv_pos : 0 < (1 / n : ℝ) := by
+      simpa [one_div] using inv_pos.mpr hn_pos
+    have := mul_le_mul_of_nonneg_right h_prod (le_of_lt h_inv_pos)
+    simpa [one_div, hn_ne, mul_comm, mul_left_comm, mul_assoc] using this
+  let δ : ℝ := ε - 1 / n
+  have h_delta_nonneg : 0 ≤ δ := sub_nonneg.mpr h_eps_lower
+  have h_const_nonneg : 0 ≤ 2 * n - 3 + 1 / n :=
+    two_mul_sub_three_add_inv_nonneg hn_two
+  have h_coeff_nonneg : 0 ≤ n ^ 2 + n := by
+    have : 0 ≤ n := le_of_lt hn_pos
+    have : 0 ≤ n ^ 2 := sq_nonneg n
+    exact add_nonneg this ‹0 ≤ n›
+  have h_expand :
+      (n ^ 2 + n) * ε ^ 2 - 2 * n * ε + 2 * (n - 1)
+        = (n ^ 2 + n) * δ ^ 2 + 2 * δ + (2 * n - 3 + 1 / n) := by
+    have hε : ε = δ + 1 / n := by simp [δ]
+    have htmp :
+        (n ^ 2 + n) * (δ + 1 / n) ^ 2 - 2 * n * (δ + 1 / n) + 2 * (n - 1)
+          - ((n ^ 2 + n) * δ ^ 2 + 2 * δ + (2 * n - 3 + 1 / n)) = 0 := by
+      have hn_ne' : (n : ℝ) ≠ 0 := hn_ne
+      field_simp [pow_two, one_div, hn_ne']
+      ring
+    have h_eq := sub_eq_zero.mp htmp
+    simpa [hε]
+      using h_eq
+  have h_sq_nonneg : 0 ≤ (n ^ 2 + n) * δ ^ 2 :=
+    mul_nonneg h_coeff_nonneg (sq_nonneg δ)
+  have h_lin_nonneg : 0 ≤ 2 * δ :=
+    mul_nonneg (show 0 ≤ (2 : ℝ) by norm_num) h_delta_nonneg
+  have h_numer_nonneg :
+      0 ≤ (n ^ 2 + n) * ε ^ 2 - 2 * n * ε + 2 * (n - 1) := by
+    have h_total := add_nonneg (add_nonneg h_sq_nonneg h_lin_nonneg) h_const_nonneg
+    simpa [h_expand] using h_total
+  have h_denom_pos : 0 < 2 * n * (n - 1) :=
+    mul_pos (mul_pos (show (0 : ℝ) < 2 by norm_num) hn_pos) hn_sub_pos
+  have h_denom_nonneg : 0 ≤ 2 * n * (n - 1) := le_of_lt h_denom_pos
+  have h_mul_eq :
+      (ε * (ε * n - 1) / (n - 1) - (ε ^ 2 / 2 - 1 / n)) * (2 * n * (n - 1))
+        - ((n ^ 2 + n) * ε ^ 2 - 2 * n * ε + 2 * (n - 1)) = 0 := by
+    field_simp [pow_two, one_div, hn_ne, hn_sub_ne, sub_eq_add_neg]
+    ring
+  have h_denom_ne : 2 * n * (n - 1) ≠ 0 := by
+    have h_two_ne : (2 : ℝ) ≠ 0 := by norm_num
+    have h_mul_ne : 2 * n ≠ 0 := mul_ne_zero h_two_ne hn_ne
+    exact mul_ne_zero h_mul_ne hn_sub_ne
+  have h_delta_eq :
+      ε * (ε * n - 1) / (n - 1) - (ε ^ 2 / 2 - 1 / n)
+        = ((n ^ 2 + n) * ε ^ 2 - 2 * n * ε + 2 * (n - 1)) / (2 * n * (n - 1)) := by
+    have h_eq := sub_eq_zero.mp h_mul_eq
+    exact (eq_div_iff_mul_eq h_denom_ne).2 h_eq
+  have h_fraction := div_nonneg h_numer_nonneg h_denom_nonneg
+  have h_diff_nonneg :
+      0 ≤ ε * (ε * n - 1) / (n - 1) - (ε ^ 2 / 2 - 1 / n) := by
+    simpa only [h_delta_eq] using h_fraction
+  have h_main := sub_nonneg.mp h_diff_nonneg
+  have h_le : ε ^ 2 / 2 ≤ ε * (ε * n - 1) / (n - 1) + 1 / n := by
+    have := add_le_add_right h_main (1 / n)
+    simpa using this
+  exact (sub_le_iff_le_add).2 h_le
+
 end Combinatorics
 
 /-! ### Helper lemmas for finite sums -/
@@ -796,13 +890,39 @@ lemma fork_transcripts_support_is_valid_fork
 -- ============================================================================
 
 /-- Success event: adversary produces accepting proof -/
-def success_event {F : Type} [CommRing F] [Field F] [Fintype F] [DecidableEq F]
+def success_event {F : Type} [Field F] [DecidableEq F]
     (VC : VectorCommitment F) (cs : R1CS F) (x : PublicInput F cs.nPub)
     (t : Transcript F VC) : Prop :=
   let _ := VC
   let _ := cs
   let _ := x
   t.valid = true
+
+/-- Fork success event: both transcripts succeed and form a valid fork. -/
+def fork_success_event {F : Type} [Field F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (x : PublicInput F cs.nPub)
+    (pair : Transcript F VC × Transcript F VC) : Prop :=
+  success_event VC cs x pair.1 ∧
+  success_event VC cs x pair.2 ∧
+  is_valid_fork VC pair.1 pair.2
+
+lemma fork_success_event.success_left {F : Type} [Field F] [DecidableEq F]
+  (VC : VectorCommitment F) (cs : R1CS F) (x : PublicInput F cs.nPub)
+  {pair : Transcript F VC × Transcript F VC}
+  (h_event : fork_success_event VC cs x pair) :
+  success_event VC cs x pair.1 := h_event.1
+
+lemma fork_success_event.success_right {F : Type} [Field F] [DecidableEq F]
+  (VC : VectorCommitment F) (cs : R1CS F) (x : PublicInput F cs.nPub)
+  {pair : Transcript F VC × Transcript F VC}
+  (h_event : fork_success_event VC cs x pair) :
+  success_event VC cs x pair.2 := h_event.2.1
+
+lemma fork_success_event.is_valid {F : Type} [Field F] [DecidableEq F]
+  (VC : VectorCommitment F) (cs : R1CS F) (x : PublicInput F cs.nPub)
+  {pair : Transcript F VC × Transcript F VC}
+  (h_event : fork_success_event VC cs x pair) :
+  is_valid_fork VC pair.1 pair.2 := h_event.2.2
 
 /-- Specialized version phrased via `success_event`. -/
 lemma fork_transcripts_support_success_is_valid_fork
@@ -836,7 +956,7 @@ lemma fork_transcripts_support_success_second
   simpa [success_event] using h_valid₂
 
 /-- Any forked transcript pair sampled after a successful run remains
-    successful and forms a valid fork. -/
+  successful and forms a valid fork. -/
 lemma fork_transcripts_support_success_event
   {F : Type} [Field F] [Fintype F] [DecidableEq F]
   (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
@@ -844,12 +964,12 @@ lemma fork_transcripts_support_success_event
   {pair : Transcript F VC × Transcript F VC}
   (h_mem : pair ∈ (fork_transcripts (VC := VC) (cs := cs) A x secParam h_card).support)
   (h_success : success_event VC cs x pair.1) :
-  success_event VC cs x pair.2 ∧ is_valid_fork VC pair.1 pair.2 := by
-  refine ⟨?_, ?_⟩
-  · exact fork_transcripts_support_success_second (VC := VC) (cs := cs)
-      (A := A) (x := x) (secParam := secParam) h_card h_mem h_success
-  · exact fork_transcripts_support_success_is_valid_fork (VC := VC) (cs := cs)
-      (A := A) (x := x) (secParam := secParam) h_card h_mem h_success
+  fork_success_event VC cs x pair := by
+  refine ⟨h_success,
+    fork_transcripts_support_success_second (VC := VC) (cs := cs)
+      (A := A) (x := x) (secParam := secParam) h_card h_mem h_success,
+    fork_transcripts_support_success_is_valid_fork (VC := VC) (cs := cs)
+      (A := A) (x := x) (secParam := secParam) h_card h_mem h_success⟩
 
 /-- A commitment is "heavy" if many challenges lead to valid proofs.
     Formally: at least ε fraction of challenges are valid. -/
@@ -1525,6 +1645,16 @@ lemma fork (VC : VectorCommitment F) (cs : R1CS F)
   classical
   unfold transcript
   simp [is_valid_fork, zero_ne_one]
+
+/-- The canonical extractor transcripts form a successful forked event. -/
+lemma deterministic_fork_success_event (VC : VectorCommitment F)
+    (cs : R1CS F) (x : PublicInput F cs.nPub) :
+    fork_success_event VC cs x
+      (transcript VC cs x 0 0, transcript VC cs x 1 0) := by
+  classical
+  refine ⟨?_, ?_, fork (VC := VC) (cs := cs) (x := x)⟩
+  · simp [success_event, transcript]
+  · simp [success_event, transcript]
 
 end Basic
 
