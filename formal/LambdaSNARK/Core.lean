@@ -9,6 +9,7 @@ import Mathlib.Data.ZMod.Basic
 import Mathlib.Algebra.Ring.Basic
 import Mathlib.Data.Matrix.Basic
 import Mathlib.Algebra.Polynomial.Basic
+import Mathlib.Algebra.Polynomial.CoeffList
 import Mathlib.Probability.ProbabilityMassFunction.Basic
 import Mathlib.Tactic
 
@@ -214,6 +215,9 @@ structure Proof (F : Type) [CommRing F] (VC : VectorCommitment F) where
   comm_quotient : VC.Commitment
   opening_quotient_α : VC.Opening
   quotient_poly : Polynomial F
+  quotient_rand : ℕ
+  quotient_commitment_spec :
+    VC.commit pp (Polynomial.coeffList quotient_poly) quotient_rand = comm_quotient
 
   -- Domain information for vanishing polynomial
   domain_size : ℕ

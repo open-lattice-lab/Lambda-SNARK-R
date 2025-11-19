@@ -197,14 +197,8 @@ def AdversaryState.commitments {F : Type} [CommRing F] (VC : VectorCommitment F)
 -- Uniform PMF over Finite Types
 -- ============================================================================
 
-/-- Uniform distribution over finite set.
-
-    **Constructive definition** (replaces previous axiom):
-    PMF where each element has probability 1/|α|.
-
-    Note: Mathlib v4.25.0 lacks ready-made uniform PMF constructor.
-    Using manual definition with sorry for HasSum proof.
-    Full formalization: 30min-1h with Mathlib.Data.Fintype.Card lemmas. -/
+/-- Uniform distribution over a finite set: every element has probability
+  `1 / |α|`. -/
 noncomputable def uniform_pmf {α : Type*} [Fintype α] [Nonempty α] : PMF α :=
   ⟨fun _ => (Fintype.card α : ENNReal)⁻¹,
    by -- HasSum (const (1/card α)) 1
@@ -317,8 +311,8 @@ noncomputable def uniform_pmf_ne {α : Type*} [Fintype α] [DecidableEq α]
 -- Run Adversary (First Execution)
 -- ============================================================================
 
-/-- Execute adversary once to get transcript.
-    Samples randomness, gets commitments, samples challenge, gets response. -/
+/-- Execute adversary once to obtain a transcript by running the adversary,
+    packaging the resulting proof into the transcript structure. -/
 noncomputable def run_adversary {F : Type} [CommRing F] [Field F] [Fintype F] [DecidableEq F]
   (VC : VectorCommitment F) (cs : R1CS F)
   (_A : Adversary F VC) (x : PublicInput F cs.nPub)
@@ -329,35 +323,33 @@ noncomputable def run_adversary {F : Type} [CommRing F] [Field F] [Fintype F] [D
   intro r
   let rand : ℕ := r
   let proof := _A.run cs x rand
-  let pp := VC.setup _secParam
   exact PMF.pure {
-    pp := pp,
+    pp := proof.pp,
     cs := cs,
     x := x,
-    domainSize := cs.nCons,
-    omega := 1,
-    comm_Az := VC.commit pp [] rand,
-    comm_Bz := VC.commit pp [] rand,
-    comm_Cz := VC.commit pp [] rand,
-    comm_quotient := VC.commit pp [] rand,
-    quotient_poly := 0,
-    quotient_rand := rand,
-    quotient_commitment_spec := by
-      simp [Polynomial.coeffList_zero],
+    domainSize := proof.domain_size,
+    omega := proof.primitive_root,
+    comm_Az := proof.comm_Az,
+    comm_Bz := proof.comm_Bz,
+    comm_Cz := proof.comm_Cz,
+    comm_quotient := proof.comm_quotient,
+    quotient_poly := proof.quotient_poly,
+    quotient_rand := proof.quotient_rand,
+    quotient_commitment_spec := proof.quotient_commitment_spec,
     view := {
       alpha := proof.challenge_α,
       Az_eval := 0,
       Bz_eval := 0,
       Cz_eval := 0,
-      quotient_eval := 0,
-      vanishing_eval := 0,
+      quotient_eval := proof.constraint_eval,
+      vanishing_eval := proof.vanishing_at_α,
       main_eq := verifierView_zero_eq (_F := F)
     },
     challenge_β := proof.challenge_β,
-    opening_Az_α := VC.openProof pp [] rand proof.challenge_α,
-    opening_Bz_β := VC.openProof pp [] rand proof.challenge_β,
-    opening_Cz_α := VC.openProof pp [] rand proof.challenge_α,
-    opening_quotient_α := VC.openProof pp [] rand proof.challenge_α,
+    opening_Az_α := proof.opening_Az_α,
+    opening_Bz_β := proof.opening_Bz_β,
+    opening_Cz_α := proof.opening_Cz_α,
+    opening_quotient_α := proof.opening_quotient_α,
     valid := verify VC cs x proof
   }
 
@@ -442,22 +434,16 @@ def is_heavy_commitment {F : Type} [Field F] [Fintype F] [DecidableEq F]
 /-!
 ## WARNING: Axiomatized Heavy Theorems
 
-The following four theorems are temporarily axiomatized to eliminate all sorry
-from the file while maintaining correct type signatures. These represent the
-core probability and protocol properties that require:
+Two probability bounds remain axiomatized to keep the development free of
+`sorry` while the probabilistic infrastructure is being formalized:
 
-1. **heavy_row_lemma**: Formalization of probabilistic adversary model via PMF.bind
-2. **fork_success_bound**: Combinatorial probability bounds over challenge space
-3. **binding_implies_unique_quotient**: Binding property of vector commitment scheme
-4. **extraction_soundness**: Integration of all components with R1CS verification
+1. **heavy_row_lemma**: Formalization of the adversary success probability via
+  `PMF.bind` and a heavy-row counting argument.
+2. **fork_success_bound**: Combinatorial lower bound on obtaining two distinct
+  successful challenges once a heavy commitment exists.
 
-These should be proven by:
-- Implementing run_adversary/rewind_adversary with PMF.bind chains
-- Adding VC.Binding typeclass with binding property
-- Completing polynomial division and quotient extraction infrastructure
-- Fixing parameter mismatches (m = cs.nVars vs cs.nCons)
-
-Estimated total effort: 8-12h for full formalization.
+These statements will be discharged after completing the PMF model for the
+adversary and proving the required binomial coefficient inequalities.
 -/
 
 /-- If adversary succeeds with probability ≥ ε, then a fraction ≥ ε - 1/|F|
