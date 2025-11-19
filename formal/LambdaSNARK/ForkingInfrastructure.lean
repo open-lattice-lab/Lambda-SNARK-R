@@ -707,9 +707,6 @@ structure ForkingVerifierEquationsCore (VC : VectorCommitment F) (cs : R1CS F)
               (extract_witness VC cs
                 (extract_quotient_diff VC cs t1 t2 h_fork m ω)
                 m ω h_m_vars x) ω).natDegree < m
-  remainder_zero :
-    (extract_quotient_diff VC cs t1 t2 h_fork m ω) %ₘ
-      vanishing_poly m ω = 0
 
 structure ForkingVerifierEquations (VC : VectorCommitment F) (cs : R1CS F)
     (t1 t2 : Transcript F VC) (h_fork : is_valid_fork VC t1 t2) where
@@ -733,9 +730,6 @@ structure ForkingVerifierEquations (VC : VectorCommitment F) (cs : R1CS F)
               (extract_witness VC cs
                 (extract_quotient_diff VC cs t1 t2 h_fork m ω)
                 m ω h_m_vars x) ω).natDegree < m
-  remainder_zero :
-    (extract_quotient_diff VC cs t1 t2 h_fork m ω) %ₘ
-      vanishing_poly m ω = 0
 
 lemma constraint_numerator_eval_matches_quotient_of_equations
     (VC : VectorCommitment F) (cs : R1CS F)
@@ -859,19 +853,21 @@ lemma vanishing_poly_dvd_quotient_sub_numerator_of_equations
 
 lemma constraint_quotient_mod_vanishing_zero_of_equations (VC : VectorCommitment F)
   (cs : R1CS F) {t1 t2 : Transcript F VC} {h_fork : is_valid_fork VC t1 t2}
-  (eqns : ForkingVerifierEquations VC cs t1 t2 h_fork) :
+  (eqns : ForkingVerifierEquations VC cs t1 t2 h_fork)
+  (h_rem : (extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω)
+      %ₘ vanishing_poly eqns.m eqns.ω = 0) :
     (extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω)
         %ₘ vanishing_poly cs.nCons eqns.ω = 0 := by
   classical
   set q := extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω
-  have h_mod : q %ₘ vanishing_poly eqns.m eqns.ω = 0 := by
-    simpa [q] using eqns.remainder_zero
-  simpa [q, eqns.h_m_cons] using h_mod
+  simpa [q, eqns.h_m_cons] using h_rem
 
 lemma constraint_poly_zero_of_equations (VC : VectorCommitment F) (cs : R1CS F)
     {t1 t2 : Transcript F VC} {h_fork : is_valid_fork VC t1 t2}
     (eqns : ForkingVerifierEquations VC cs t1 t2 h_fork)
-    (x : PublicInput F cs.nPub) :
+    (x : PublicInput F cs.nPub)
+    (h_rem : (extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω)
+        %ₘ vanishing_poly eqns.m eqns.ω = 0) :
     ∀ i : Fin cs.nCons,
       constraintPoly cs
         (extract_witness VC cs
@@ -889,10 +885,7 @@ lemma constraint_poly_zero_of_equations (VC : VectorCommitment F) (cs : R1CS F)
       have h_q := eqns.quotient_eval x i
       simpa [q, w] using h_q
     ·
-      have h_mod :=
-        constraint_quotient_mod_vanishing_zero_of_equations (VC := VC)
-          (cs := cs) (t1 := t1) (t2 := t2) (h_fork := h_fork) eqns
-      simpa [q, eqns.h_m_cons] using h_mod
+      simpa [q] using h_rem
   have h_sat : satisfies cs w :=
     (quotient_exists_iff_satisfies cs w eqns.m eqns.ω eqns.h_m_cons eqns.h_primitive).mpr h_exists
   have h_zero := (satisfies_iff_constraint_zero cs w).mp h_sat
@@ -901,7 +894,9 @@ lemma constraint_poly_zero_of_equations (VC : VectorCommitment F) (cs : R1CS F)
 lemma constraint_numerator_mod_vanishing_zero_of_equations (VC : VectorCommitment F)
     (cs : R1CS F) {t1 t2 : Transcript F VC} {h_fork : is_valid_fork VC t1 t2}
     (eqns : ForkingVerifierEquations VC cs t1 t2 h_fork)
-    (x : PublicInput F cs.nPub) :
+    (x : PublicInput F cs.nPub)
+    (h_rem : (extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω)
+        %ₘ vanishing_poly eqns.m eqns.ω = 0) :
     (LambdaSNARK.constraintNumeratorPoly cs
       (extract_witness VC cs
         (extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω)
@@ -911,7 +906,7 @@ lemma constraint_numerator_mod_vanishing_zero_of_equations (VC : VectorCommitmen
   set q := extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω
   set w := extract_witness VC cs q eqns.m eqns.ω eqns.h_m_vars x
   have h_zero_raw := constraint_poly_zero_of_equations (VC := VC) (cs := cs)
-      (t1 := t1) (t2 := t2) (h_fork := h_fork) eqns x
+      (t1 := t1) (t2 := t2) (h_fork := h_fork) eqns x h_rem
   have h_zero : ∀ i : Fin cs.nCons, constraintPoly cs w i = 0 := by
     simpa [q, w] using h_zero_raw
   have h_prim : IsPrimitiveRoot eqns.ω cs.nCons := by
@@ -924,7 +919,9 @@ lemma constraint_numerator_mod_vanishing_zero_of_equations (VC : VectorCommitmen
 lemma constraint_numerator_eval_zero_of_equations (VC : VectorCommitment F)
     (cs : R1CS F) {t1 t2 : Transcript F VC} {h_fork : is_valid_fork VC t1 t2}
     (eqns : ForkingVerifierEquations VC cs t1 t2 h_fork)
-    (x : PublicInput F cs.nPub) :
+    (x : PublicInput F cs.nPub)
+    (h_rem : (extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω)
+        %ₘ vanishing_poly eqns.m eqns.ω = 0) :
     ∀ i : Fin cs.nCons,
       (LambdaSNARK.constraintNumeratorPoly cs
         (extract_witness VC cs
@@ -936,7 +933,7 @@ lemma constraint_numerator_eval_zero_of_equations (VC : VectorCommitment F)
   set w := extract_witness VC cs q eqns.m eqns.ω eqns.h_m_vars x
   have h_vanish :=
     constraint_poly_zero_of_equations (VC := VC) (cs := cs)
-      (t1 := t1) (t2 := t2) (h_fork := h_fork) eqns x
+      (t1 := t1) (t2 := t2) (h_fork := h_fork) eqns x h_rem
   intro i
   have h_match :=
     constraint_numerator_eval_matches_quotient_of_equations (VC := VC)
@@ -961,6 +958,8 @@ theorem extraction_soundness {F : Type} [Field F] [Fintype F] [DecidableEq F]
     (t1 t2 : Transcript F VC)
     (h_fork : is_valid_fork VC t1 t2)
     (eqns : ForkingVerifierEquations VC cs t1 t2 h_fork)
+    (h_rem : (extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω)
+        %ₘ vanishing_poly eqns.m eqns.ω = 0)
     (h_sis : ModuleSIS_Hard 256 2 12289 1024) :
     (x : PublicInput F cs.nPub) →
     satisfies cs
@@ -971,7 +970,7 @@ theorem extraction_soundness {F : Type} [Field F] [Fintype F] [DecidableEq F]
   have _ := h_sis
   classical
   have h_zero := constraint_poly_zero_of_equations (VC := VC) (cs := cs)
-      (t1 := t1) (t2 := t2) (h_fork := h_fork) eqns x
+      (t1 := t1) (t2 := t2) (h_fork := h_fork) eqns x h_rem
   exact
     extract_witness_satisfies_of_constraint_zero (VC := VC) (cs := cs)
       (q := extract_quotient_diff VC cs t1 t2 h_fork eqns.m eqns.ω)
@@ -987,6 +986,12 @@ structure ProtocolForkingEquations {F : Type} [Field F] [Fintype F]
     (t1 t2 : Transcript F VC) →
     (h_fork : is_valid_fork VC t1 t2) →
     ForkingVerifierEquationsCore VC cs t1 t2 h_fork
+  remainder_zero :
+    (t1 t2 : Transcript F VC) →
+    (h_fork : is_valid_fork VC t1 t2) →
+      let core := buildCore t1 t2 h_fork
+      (extract_quotient_diff VC cs t1 t2 h_fork core.m core.ω)
+        %ₘ vanishing_poly core.m core.ω = 0
 
 structure ForkingEquationsProvider {F : Type} [Field F] [Fintype F]
     [DecidableEq F] (VC : VectorCommitment F) (cs : R1CS F) where
@@ -995,6 +1000,12 @@ structure ForkingEquationsProvider {F : Type} [Field F] [Fintype F]
     (t1 t2 : Transcript F VC) →
     (h_fork : is_valid_fork VC t1 t2) →
     ForkingVerifierEquationsCore VC cs t1 t2 h_fork
+  remainder_zero :
+    (t1 t2 : Transcript F VC) →
+    (h_fork : is_valid_fork VC t1 t2) →
+      let core := buildCore t1 t2 h_fork
+      (extract_quotient_diff VC cs t1 t2 h_fork core.m core.ω)
+        %ₘ vanishing_poly core.m core.ω = 0
 
 namespace ForkingEquationsProvider
 
@@ -1014,14 +1025,26 @@ def build (provider : ForkingEquationsProvider VC cs)
     quotient_eval := core.quotient_eval
     quotient_diff_natDegree_lt_domain := by
       intro x
-      simpa using core.quotient_diff_natDegree_lt_domain x
-    remainder_zero := core.remainder_zero }
+      simpa using core.quotient_diff_natDegree_lt_domain x }
+
+@[simp]
+lemma build_remainder_zero (provider : ForkingEquationsProvider VC cs)
+    (t1 t2 : Transcript F VC) (h_fork : is_valid_fork VC t1 t2) :
+    (extract_quotient_diff VC cs t1 t2 h_fork
+        (provider.build t1 t2 h_fork).m (provider.build t1 t2 h_fork).ω)
+        %ₘ vanishing_poly (provider.build t1 t2 h_fork).m
+          (provider.build t1 t2 h_fork).ω = 0 := by
+  classical
+  let core := provider.buildCore t1 t2 h_fork
+  have h := provider.remainder_zero t1 t2 h_fork
+  simpa [build, core] using h
 
 def ofProtocol (VC : VectorCommitment F) (cs : R1CS F)
   (proto : ProtocolForkingEquations VC cs) :
   ForkingEquationsProvider VC cs :=
   { square := proto.square
-    buildCore := proto.buildCore }
+    buildCore := proto.buildCore
+    remainder_zero := proto.remainder_zero }
 
 end ForkingEquationsProvider
 
@@ -1117,7 +1140,9 @@ lemma witness_satisfies (VC : VectorCommitment F) (cs : R1CS F)
   let hFork := fork (VC := VC) (cs := cs) (x := x)
   let eqns := provider.build t1 t2 hFork
   let q := extract_quotient_diff VC cs t1 t2 hFork eqns.m eqns.ω
-  have h_sat := extraction_soundness VC cs t1 t2 hFork eqns h_sis x
+  have h_rem := provider.build_remainder_zero t1 t2 hFork
+  have h_sat :=
+    extraction_soundness VC cs t1 t2 hFork eqns h_rem h_sis x
   simpa [q]
 
 lemma witness_public (VC : VectorCommitment F) (cs : R1CS F)

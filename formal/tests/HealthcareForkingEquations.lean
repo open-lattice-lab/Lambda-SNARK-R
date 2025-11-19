@@ -18,7 +18,7 @@ variable {VC : VectorCommitment HealthcareField}
 variable (t1 t2 : Transcript HealthcareField VC)
 variable (h_fork : is_valid_fork VC t1 t2)
 
-/--
+
 
 lemma healthcare_extract_quotient_eq_explicit
     (VC : VectorCommitment HealthcareField)
@@ -103,8 +103,7 @@ noncomputable def healthcareForkingCore
       simpa using healthcareOmega_isPrimitiveRoot
     quotient_eval := healthcare_quotient_eval VC t1 t2 h_fork
     quotient_diff_natDegree_lt_domain :=
-      healthcare_quotient_diff_natDegree_lt_domain VC t1 t2 h_fork
-    remainder_zero := healthcare_remainder_zero VC t1 t2 h_fork }
+      healthcare_quotient_diff_natDegree_lt_domain VC t1 t2 h_fork }
 
 /-- The healthcare R1CS admits a square evaluation domain. -/
 lemma healthcare_square :
@@ -116,6 +115,7 @@ noncomputable instance healthcareEquationWitness
     ForkingEquationWitness VC healthcareR1CS where
   square := healthcare_square
   buildCore := healthcareForkingCore VC
+  remainder_zero := healthcare_remainder_zero VC
 
 /-- Convenience alias producing the protocol witness via typeclass search. -/
 noncomputable def healthcareProtocol

@@ -27,6 +27,13 @@ class ForkingEquationWitness where
     (t1 t2 : Transcript F VC) →
     (h_fork : is_valid_fork VC t1 t2) →
     ForkingVerifierEquationsCore VC cs t1 t2 h_fork
+  /-- Remainder vanishes for the quotient difference polynomial.-/
+  remainder_zero :
+    (t1 t2 : Transcript F VC) →
+    (h_fork : is_valid_fork VC t1 t2) →
+      let core := buildCore t1 t2 h_fork
+      (extract_quotient_diff VC cs t1 t2 h_fork core.m core.ω)
+        %ₘ vanishing_poly core.m core.ω = 0
 
 namespace ForkingEquationWitness
 
@@ -36,7 +43,8 @@ variable {VC cs}
 noncomputable def protocol (inst : ForkingEquationWitness VC cs) :
     ProtocolForkingEquations VC cs :=
   { square := inst.square
-    buildCore := inst.buildCore }
+    buildCore := inst.buildCore
+    remainder_zero := inst.remainder_zero }
 
 /-- Promote a circuit witness to a `ForkingEquationsProvider`.-/
 noncomputable def provider (inst : ForkingEquationWitness VC cs) :
