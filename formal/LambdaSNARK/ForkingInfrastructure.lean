@@ -906,6 +906,44 @@ def fork_success_event {F : Type} [Field F] [DecidableEq F]
   success_event VC cs x pair.2 ∧
   is_valid_fork VC pair.1 pair.2
 
+/-- Total success probability of the adversary's first execution. -/
+noncomputable def successProbability {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ) : ℝ :=
+  ((run_adversary_transcript (VC := VC) (cs := cs) A x secParam).toOuterMeasure
+      {t | success_event VC cs x t}).toReal
+
+lemma successProbability_nonneg {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ) :
+    0 ≤ successProbability VC cs A x secParam := by
+  unfold successProbability
+  exact ENNReal.toReal_nonneg
+
+lemma successProbability_le_one {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ) :
+    successProbability VC cs A x secParam ≤ 1 := by
+  classical
+  unfold successProbability
+  set p := run_adversary_transcript (VC := VC) (cs := cs) A x secParam with hp
+  set S := {t : Transcript F VC | success_event VC cs x t} with hS
+  set U : Set (Transcript F VC) := Set.univ
+  have h_subset : S ∩ p.support ⊆ U := by
+    intro t _
+    exact Set.mem_univ _
+  have h_le : p.toOuterMeasure S ≤ p.toOuterMeasure U :=
+    p.toOuterMeasure_mono h_subset
+  have h_support_subset : p.support ⊆ U := by
+    intro t _
+    trivial
+  have h_univ : p.toOuterMeasure U = 1 := by
+    simpa [U] using (p.toOuterMeasure_apply_eq_one_iff (s := U)).2 h_support_subset
+  have h_le_one : p.toOuterMeasure S ≤ ENNReal.ofReal 1 := by
+    simpa [U, h_univ, ENNReal.ofReal_one] using h_le
+  have h_toReal := ENNReal.toReal_le_of_le_ofReal zero_le_one h_le_one
+  simpa [successProbability, hp, hS, U, ENNReal.ofReal_one] using h_toReal
+
 lemma fork_success_event.success_left {F : Type} [Field F] [DecidableEq F]
   (VC : VectorCommitment F) (cs : R1CS F) (x : PublicInput F cs.nPub)
   {pair : Transcript F VC × Transcript F VC}
