@@ -142,6 +142,10 @@ equation-provider requirement.
 lemma healthcare_knowledge_soundness
     (h_non_negl : NonNegligible ε)
     (h_mass : ε secParam * (Fintype.card HealthcareField : ℝ) ≥ 2)
+    (h_success_prob : ∀ (x : PublicInput HealthcareField healthcareR1CS.nPub),
+        (∃ π, verify VC healthcareR1CS x π = true) →
+          (min (ε secParam) 1) <
+            successProbability VC healthcareR1CS A x secParam)
     (h_sis : ModuleSIS_Hard 256 2 12289 1024)
     (h_rom : True) :
     ∃ (E : Extractor HealthcareField VC),
@@ -153,7 +157,7 @@ lemma healthcare_knowledge_soundness
           extractPublic healthcareR1CS.h_pub_le w = x) := by
   simpa using
     (knowledge_soundness_of VC healthcareR1CS secParam A ε
-      h_non_negl h_mass h_sis h_rom)
+      h_non_negl h_mass h_success_prob h_sis h_rom)
 
 end Usage
 

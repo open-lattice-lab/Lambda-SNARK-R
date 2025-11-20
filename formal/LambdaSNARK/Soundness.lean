@@ -58,23 +58,6 @@ def NonNegligible (ε : ℕ → ℝ) : Prop :=
 
 /-! ### Placeholder probability lemmas for forking analysis -/
 
-lemma heavy_states_probability {F : Type} [Field F] [Fintype F] [DecidableEq F]
-    (VC : VectorCommitment F) (cs : R1CS F)
-    (A : Adversary F VC) (x : PublicInput F cs.nPub)
-    (ε : ℝ) (secParam : ℕ)
-    (h_ε_pos : 0 < ε) (h_ε_bound : ε ≤ 1)
-    (h_field_size : (Fintype.card F : ℝ) ≥ 2)
-    (h_success : True) :
-    ∃ (heavy_comms : Finset (VC.Commitment × VC.Commitment × VC.Commitment × VC.Commitment)),
-      (heavy_comms.card : ℝ) ≥ (ε - 1 / (Fintype.card F : ℝ)) * secParam ∧
-      ∀ c ∈ heavy_comms, is_heavy_commitment VC cs x c ε := by
-  classical
-  have h_pos : (Fintype.card F : ℝ) > 0 := by
-    have h_two : (0 : ℝ) < 2 := by norm_num
-    exact lt_of_lt_of_le h_two h_field_size
-  simpa using
-    heavy_row_lemma VC cs A x ε secParam h_ε_pos h_ε_bound h_pos h_success
-
 lemma fork_event_probability_lower_bound {F : Type} [Field F] [Fintype F] [DecidableEq F]
     (VC : VectorCommitment F) (cs : R1CS F)
     (A : Adversary F VC) (x : PublicInput F cs.nPub)
@@ -83,7 +66,7 @@ lemma fork_event_probability_lower_bound {F : Type} [Field F] [Fintype F] [Decid
     (h_field_size : (Fintype.card F : ℝ) ≥ 2)
     (h_card_nat : Fintype.card F ≥ 2)
     (h_ε_mass : ε * (Fintype.card F : ℝ) ≥ 2)
-    (h_success : True) :
+  (h_success : ε < successProbability VC cs A x secParam) :
     let valid_challenges : Finset F := (Finset.univ : Finset F)
     let total_pairs := Nat.choose (Fintype.card F) 2
     let valid_pairs := Nat.choose valid_challenges.card 2
@@ -201,7 +184,7 @@ lemma fork_success_event_probability_lower_bound {F : Type} [Field F] [Fintype F
     (h_field_size : (Fintype.card F : ℝ) ≥ 2)
     (h_card_nat : Fintype.card F ≥ 2)
     (h_ε_mass : ε * (Fintype.card F : ℝ) ≥ 2)
-    (h_success : True) :
+  (h_success : ε < successProbability VC cs A x secParam) :
     let valid_challenges : Finset F := (Finset.univ : Finset F)
     let total_pairs := Nat.choose (Fintype.card F) 2
     let valid_pairs := Nat.choose valid_challenges.card 2
@@ -238,19 +221,19 @@ then with probability ≥ ε²/2 - negl(λ), we can extract two valid transcript
 with the same commitment but different challenges, from which we extract a witness.
 
 **Statement**: For adversary A with success probability ε:
-1. Heavy Row Property: ∃ "many" commitments C with ≥ ε|F| valid challenges
+1. Heavy Commitment: witness a commitment C with ≥ ε|F| valid challenges (in progress)
 2. Fork Success: For heavy C, Pr[two valid distinct challenges] ≥ ε²/2
 3. Extraction: From fork (C, α₁, π₁), (C, α₂, π₂) → extract witness w
 4. Correctness: extracted w satisfies R1CS (else breaks Module-SIS)
 
 **Proof Strategy**:
-1. Apply heavy_row_lemma: Pr[success] ≥ ε → ∃ heavy commitments
+1. Produce heavy commitment from success probability (in progress)
 2. Apply fork_success_bound: For heavy C, Pr[fork] ≥ ε²/2 - 1/|F|
 3. Apply extraction_soundness: Fork → witness (by Module-SIS)
 4. Compose: Pr[extract witness] ≥ ε²/2 - negl(λ)
 
 **Dependencies**:
-- heavy_row_lemma (ForkingInfrastructure.lean)
+- exists_heavyCommitment_of_successProbability_lt (ForkingInfrastructure.lean)
 - fork_success_bound (ForkingInfrastructure.lean)
 - extraction_soundness (ForkingInfrastructure.lean)
 - Module-SIS hardness assumption
@@ -264,8 +247,8 @@ theorem forking_lemma {F : Type} [Field F] [Fintype F] [DecidableEq F]
   (h_ε_mass : ε * (Fintype.card F : ℝ) ≥ 2)
   (h_sis : ModuleSIS_Hard 256 2 12289 1024)
   (provider : ForkingEquationsProvider VC cs)
-  -- Hypothesis: Adversary succeeds with probability ≥ ε
-  (h_success : True)  -- TODO: formalize Pr[A produces accepting proof] ≥ ε
+  -- Hypothesis: adversary success probability exceeds ε
+  (h_success : ε < successProbability VC cs A x secParam)
   :
     let valid_challenges : Finset F := (Finset.univ : Finset F)
     let total_pairs := Nat.choose (Fintype.card F) 2
@@ -275,9 +258,11 @@ theorem forking_lemma {F : Type} [Field F] [Fintype F] [DecidableEq F]
       satisfies cs w ∧
       extractPublic cs.h_pub_le w = x ∧
       (valid_pairs : ℝ) / (total_pairs : ℝ) ≥ ε^2 / 2 - 1 / (Fintype.card F : ℝ) := by
-  -- Step 1: Apply heavy_row_lemma
-  -- From h_success: Pr[success] ≥ ε
-  -- Obtain: ∃ heavy_comms with many valid challenges
+  -- Step 1: Heavy commitments infrastructure.
+  obtain ⟨heavy_comm, h_heavy_mem⟩ :=
+    exists_heavyCommitment_of_successProbability_lt (VC := VC) (cs := cs) (A := A)
+      (x := x) (secParam := secParam) (ε := ε) h_success
+  -- TODO: upgrade `heavy_comm` to the combinatorial heavy-row witness used below.
   have h_field_pos : (Fintype.card F : ℝ) > 0 := by
     have h_two : (2 : ℝ) ≤ (Fintype.card F : ℝ) := by
       exact_mod_cast h_field_size
@@ -290,8 +275,6 @@ theorem forking_lemma {F : Type} [Field F] [Fintype F] [DecidableEq F]
   let valid_pairs := Nat.choose valid_challenges.card 2
 
   -- Probability lower bounds from the proved combinatorial lemmas
-  obtain ⟨heavy_comms, h_heavy_card, h_all_heavy⟩ :=
-    heavy_states_probability VC cs A x ε secParam h_ε_pos h_ε_bound h_field_size h_success
   have h_fork_event_prob :=
     fork_success_event_probability_lower_bound VC cs A x ε secParam
       h_ε_pos h_ε_bound h_field_size h_card_nat h_ε_mass h_success
@@ -348,6 +331,9 @@ theorem knowledge_soundness {F : Type} [Field F] [Fintype F] [DecidableEq F]
   (A : Adversary F VC) (ε : ℕ → ℝ)
   (h_non_negl : NonNegligible ε)
   (h_mass : ε secParam * (Fintype.card F : ℝ) ≥ 2)
+  (h_success_prob : ∀ (x : PublicInput F cs.nPub),
+      (∃ π, verify VC cs x π = true) →
+        (min (ε secParam) 1) < successProbability VC cs A x secParam)
   (h_sis : ModuleSIS_Hard 256 2 12289 1024)  -- Module-SIS hardness
   (provider : ForkingEquationsProvider VC cs)
   (h_rom : True)  -- Random Oracle Model (placeholder)
@@ -457,10 +443,12 @@ theorem knowledge_soundness {F : Type} [Field F] [Fintype F] [DecidableEq F]
     let valid_challenges : Finset F := (Finset.univ : Finset F)
     let total_pairs := Nat.choose (Fintype.card F) 2
     let valid_pairs := Nat.choose valid_challenges.card 2
+    have h_success_val : ε_val < successProbability VC cs A x secParam := by
+      simpa [ε_val] using h_success_prob x hx_success
     -- Forking lemma yields witness with matching public input
     obtain ⟨w, h_sat, h_pub, h_prob⟩ :=
       forking_lemma VC cs A x ε_val secParam h_eps_pos h_eps_bound h_field_size h_mass' h_sis
-        provider trivial
+        provider h_success_val
     have h_prob' :
         (valid_pairs : ℝ) / (total_pairs : ℝ) ≥ ε_val ^ 2 / 2 - 1 / (Fintype.card F : ℝ) := by
       simpa [valid_challenges, total_pairs, valid_pairs] using h_prob
@@ -480,6 +468,9 @@ theorem knowledge_soundness_of {F : Type} [Field F] [Fintype F] [DecidableEq F]
     (A : Adversary F VC) (ε : ℕ → ℝ)
     (h_non_negl : NonNegligible ε)
     (h_mass : ε secParam * (Fintype.card F : ℝ) ≥ 2)
+  (h_success_prob : ∀ (x : PublicInput F cs.nPub),
+    (∃ π, verify VC cs x π = true) →
+      (min (ε secParam) 1) < successProbability VC cs A x secParam)
     (h_sis : ModuleSIS_Hard 256 2 12289 1024)
     [ForkingEquationWitness VC cs]
     (h_rom : True) :
@@ -495,7 +486,7 @@ theorem knowledge_soundness_of {F : Type} [Field F] [Fintype F] [DecidableEq F]
           extractPublic cs.h_pub_le w = x ∧
           (valid_pairs : ℝ) / (total_pairs : ℝ) ≥ (min (ε secParam) 1) ^ 2 / 2
             - 1 / (Fintype.card F : ℝ)) :=
-  knowledge_soundness VC cs secParam A ε h_non_negl h_mass h_sis
+  knowledge_soundness VC cs secParam A ε h_non_negl h_mass h_success_prob h_sis
     (ForkingEquationWitness.providerOf (VC := VC) (cs := cs)) h_rom
 
 end LambdaSNARK
