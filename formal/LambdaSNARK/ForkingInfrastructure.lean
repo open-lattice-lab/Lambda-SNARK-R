@@ -177,6 +177,46 @@ These statements will be discharged after completing the PMF model for the
 adversary and proving the required binomial coefficient inequalities.
 -/
 
+lemma exists_heavyCommitment_of_successProbability_ge
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F)
+    (A : Adversary F VC) (x : PublicInput F cs.nPub)
+    {ε : ℝ} (secParam : ℕ)
+    (h_ε_pos : 0 < ε)
+    (h_prob : ε ≤ successProbability VC cs A x secParam) :
+    ∃ comm_tuple,
+      comm_tuple ∈ heavyCommitments VC cs A x secParam
+        (max (ε - 1 / (Fintype.card F : ℝ)) 0) := by
+  classical
+  set n : ℝ := (Fintype.card F : ℝ)
+  have hn_pos : 0 < n := by
+    have : 0 < (Fintype.card F : ℝ) :=
+      by exact_mod_cast (Fintype.card_pos : 0 < Fintype.card F)
+    simpa [n] using this
+  set δ := max (ε - 1 / n) 0 with hδ_def
+  have hδ_lt : δ < successProbability VC cs A x secParam := by
+    by_cases h_case : ε ≤ 1 / n
+    · have h_sub : ε - 1 / n ≤ 0 := sub_nonpos.mpr h_case
+      have hδ_zero : δ = 0 := by
+        simpa [δ, hδ_def, h_sub] using max_eq_right h_sub
+      have h_succ_pos : 0 < successProbability VC cs A x secParam :=
+        lt_of_lt_of_le h_ε_pos h_prob
+      simpa [hδ_zero]
+        using h_succ_pos
+    · have h_gt : 1 / n < ε := lt_of_not_ge h_case
+      have h_sub_pos : 0 < ε - 1 / n := sub_pos.mpr h_gt
+      have hδ_eq : δ = ε - 1 / n := by
+        have h_le : 0 ≤ ε - 1 / n := le_of_lt h_sub_pos
+        simpa [δ, hδ_def, h_le] using max_eq_left h_le
+      have h_lt_eps : δ < ε := by
+        have h_inv_pos : 0 < 1 / n := by
+          simpa [one_div] using inv_pos.mpr hn_pos
+        have h_sub_lt : ε - 1 / n < ε := sub_lt_self ε h_inv_pos
+        simpa [hδ_eq] using h_sub_lt
+      exact lt_of_lt_of_le h_lt_eps h_prob
+  exact exists_heavyCommitment_of_successProbability_lt (VC := VC) (cs := cs)
+    (A := A) (x := x) (secParam := secParam) (ε := δ) hδ_lt
+
 /-- If adversary succeeds with probability ≥ ε, then a fraction ≥ ε - 1/|F|
     of commitment choices are "heavy": for each such commitment,
     at least ε|F| challenges lead to accepting proofs.

@@ -179,6 +179,16 @@ noncomputable def heavyCommitMass (ε : ℝ) : ENNReal := by
     else
       0
 
+noncomputable def heavyCommitSeedWeight (ε : ℝ)
+    (rand : Fin secParam.succ) : ENNReal := by
+  classical
+  exact
+    if commitTupleOfRandomness VC cs A x secParam rand ∈
+        heavyCommitments VC cs A x secParam ε then
+      (uniform_pmf : PMF (Fin (secParam.succ))) rand
+    else
+      0
+
 noncomputable def lightCommitMass (ε : ℝ) : ENNReal := by
   classical
   exact ∑' comm_tuple,
@@ -229,26 +239,6 @@ lemma successMassGivenCommit_le_commitMass
     · simp [hSucc]
   simpa [hp] using ENNReal.tsum_le_tsum h_pointwise
 
-lemma commitMass_eq_run_adversary_commit_tuple
-    {F : Type} [Field F] [Fintype F] [DecidableEq F]
-    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
-    (x : PublicInput F cs.nPub) (secParam : ℕ)
-    (comm_tuple : VC.Commitment × VC.Commitment × VC.Commitment × VC.Commitment) :
-    commitMass VC cs A x secParam comm_tuple =
-      run_adversary_commit_tuple VC cs A x secParam comm_tuple := by
-  classical
-  unfold commitMass
-  set p := run_adversary_transcript (VC := VC) (cs := cs) A x secParam with hp
-  change (∑' t, (if transcriptCommitTuple VC t = comm_tuple then p t else 0))
-      = run_adversary_commit_tuple VC cs A x secParam comm_tuple
-  have h_map :
-      run_adversary_commit_tuple VC cs A x secParam comm_tuple
-        = ∑' t, (if transcriptCommitTuple VC t = comm_tuple then p t else 0) := by
-    simpa [run_adversary_commit_tuple, hp.symm, PMF.map_apply, eq_comm]
-      using (PMF.map_apply (transcriptCommitTuple VC)
-        (run_adversary_transcript (VC := VC) (cs := cs) A x secParam) comm_tuple)
-  simpa using h_map.symm
-
 lemma successMassGivenCommit_le_run_adversary_commit_tuple
     {F : Type} [Field F] [Fintype F] [DecidableEq F]
     (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
@@ -261,6 +251,141 @@ lemma successMassGivenCommit_le_run_adversary_commit_tuple
       (x := x) (secParam := secParam) (comm_tuple := comm_tuple)
   simpa [commitMass_eq_run_adversary_commit_tuple (VC := VC) (cs := cs) (A := A)
     (x := x) (secParam := secParam) (comm_tuple := comm_tuple)] using h
+
+lemma heavyCommitMass_eq_uniform_randomness_sum
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ)
+    (ε : ℝ) :
+    heavyCommitMass VC cs A x secParam ε =
+      ∑ rand : Fin secParam.succ,
+        heavyCommitSeedWeight VC cs A x secParam ε rand := by
+  classical
+  let C := VC.Commitment × VC.Commitment × VC.Commitment × VC.Commitment
+  have h_term :
+      ∀ comm : C,
+        (if comm ∈ heavyCommitments VC cs A x secParam ε then
+            commitMass VC cs A x secParam comm
+          else
+            0)
+          =
+          ∑' rand : Fin secParam.succ,
+            (if comm ∈ heavyCommitments VC cs A x secParam ε then
+                commitSeedWeight VC cs A x secParam comm rand
+              else
+                0) := by
+    intro comm
+    by_cases h_mem : comm ∈ heavyCommitments VC cs A x secParam ε
+    · simp [h_mem, commitMass_eq_uniform_randomness_sum, tsum_fintype]
+    · simp [h_mem]
+  have h_sum :
+      heavyCommitMass VC cs A x secParam ε =
+        ∑' comm : C,
+          ∑' rand : Fin secParam.succ,
+            (if comm ∈ heavyCommitments VC cs A x secParam ε then
+                commitSeedWeight VC cs A x secParam comm rand
+              else
+                0) := by
+    unfold heavyCommitMass
+    have :
+        (∑' comm : C,
+            (if comm ∈ heavyCommitments VC cs A x secParam ε then
+                commitMass VC cs A x secParam comm
+              else
+                0))
+          =
+            ∑' comm : C,
+              ∑' rand : Fin secParam.succ,
+                (if comm ∈ heavyCommitments VC cs A x secParam ε then
+                    commitSeedWeight VC cs A x secParam comm rand
+                  else
+                    0) := by
+      refine tsum_congr ?_
+      intro comm
+      exact h_term comm
+    simpa [tsum_fintype]
+      using this
+  have h_swap :
+      (∑' comm : C,
+          ∑' rand : Fin secParam.succ,
+            (if comm ∈ heavyCommitments VC cs A x secParam ε then
+                commitSeedWeight VC cs A x secParam comm rand
+              else
+                0))
+        = ∑' rand : Fin secParam.succ,
+            ∑' comm : C,
+              (if comm ∈ heavyCommitments VC cs A x secParam ε then
+                  commitSeedWeight VC cs A x secParam comm rand
+                else
+                  0) := by
+    simpa using
+      ENNReal.tsum_comm
+        (f := fun (comm : C) (rand : Fin secParam.succ) =>
+          if comm ∈ heavyCommitments VC cs A x secParam ε then
+            commitSeedWeight VC cs A x secParam comm rand
+          else
+            0)
+  have h_inner :
+      ∀ rand : Fin secParam.succ,
+        (∑' comm : C,
+            (if comm ∈ heavyCommitments VC cs A x secParam ε then
+                commitSeedWeight VC cs A x secParam comm rand
+              else
+                0))
+          = heavyCommitSeedWeight VC cs A x secParam ε rand := by
+    intro rand
+    classical
+    set c := commitTupleOfRandomness VC cs A x secParam rand
+    have h_single :
+        (∑' comm : C,
+            (if comm ∈ heavyCommitments VC cs A x secParam ε then
+                commitSeedWeight VC cs A x secParam comm rand
+              else
+                0))
+          =
+            (if c ∈ heavyCommitments VC cs A x secParam ε then
+                commitSeedWeight VC cs A x secParam c rand
+              else
+                0) := by
+      refine
+        tsum_eq_single c
+          (by
+            intro comm h_comm_ne
+            by_cases h_mem : comm ∈ heavyCommitments VC cs A x secParam ε
+            · have h_ne' : comm ≠ commitTupleOfRandomness VC cs A x secParam rand := by
+                simpa [c] using h_comm_ne
+              simp [commitSeedWeight, h_mem, h_ne']
+            · simp [h_mem])
+    have h_eval :
+        (if c ∈ heavyCommitments VC cs A x secParam ε then
+            commitSeedWeight VC cs A x secParam c rand
+          else
+            0)
+          = heavyCommitSeedWeight VC cs A x secParam ε rand := by
+      simp [heavyCommitSeedWeight, commitSeedWeight, c]
+    exact h_single.trans h_eval
+  calc
+    heavyCommitMass VC cs A x secParam ε
+        = ∑' comm : C,
+            ∑' rand : Fin secParam.succ,
+              (if comm ∈ heavyCommitments VC cs A x secParam ε then
+                  commitSeedWeight VC cs A x secParam comm rand
+                else
+                  0) := h_sum
+    _ = ∑' rand : Fin secParam.succ,
+            ∑' comm : C,
+              (if comm ∈ heavyCommitments VC cs A x secParam ε then
+                  commitSeedWeight VC cs A x secParam comm rand
+                else
+                  0) := h_swap
+    _ = ∑' rand : Fin secParam.succ,
+            heavyCommitSeedWeight VC cs A x secParam ε rand := by
+          refine tsum_congr ?_
+          intro rand
+          exact h_inner rand
+    _ = ∑ rand : Fin secParam.succ,
+            heavyCommitSeedWeight VC cs A x secParam ε rand := by
+          simp [tsum_fintype]
 
 lemma tsum_commitMass_eq_one
     {F : Type} [Field F] [Fintype F] [DecidableEq F]

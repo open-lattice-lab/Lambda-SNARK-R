@@ -451,6 +451,17 @@ noncomputable def successSeedWeight
         (transcriptOfRandomness VC cs A x secParam rand) then
         (uniform_pmf : PMF (Fin (secParam.succ))) rand else 0
 
+/-- Weight contributed by a randomness seed towards a fixed commitment tuple. -/
+noncomputable def commitSeedWeight
+    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ)
+    (comm_tuple : VC.Commitment × VC.Commitment × VC.Commitment × VC.Commitment)
+    (rand : Fin secParam.succ) : ENNReal :=
+  by
+    classical
+    exact if comm_tuple = commitTupleOfRandomness VC cs A x secParam rand then
+      (uniform_pmf : PMF (Fin (secParam.succ))) rand else 0
+
 lemma successMass_eq_uniform_randomness_tsum
     {F : Type} [Field F] [Fintype F] [DecidableEq F]
     (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
@@ -520,6 +531,62 @@ noncomputable def commitMass
     classical
     let p := run_adversary_transcript (VC := VC) (cs := cs) A x secParam
     exact ∑' t, (if transcriptCommitTuple VC t = comm_tuple then p t else 0)
+
+lemma commitMass_eq_run_adversary_commit_tuple
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ)
+    (comm_tuple : VC.Commitment × VC.Commitment × VC.Commitment × VC.Commitment) :
+    commitMass VC cs A x secParam comm_tuple =
+      run_adversary_commit_tuple VC cs A x secParam comm_tuple := by
+  classical
+  unfold commitMass
+  set p := run_adversary_transcript (VC := VC) (cs := cs) A x secParam with hp
+  change (∑' t, (if transcriptCommitTuple VC t = comm_tuple then p t else 0))
+      = run_adversary_commit_tuple VC cs A x secParam comm_tuple
+  have h_map :
+      run_adversary_commit_tuple VC cs A x secParam comm_tuple
+        = ∑' t, (if transcriptCommitTuple VC t = comm_tuple then p t else 0) := by
+    simpa [run_adversary_commit_tuple, hp.symm, PMF.map_apply, eq_comm]
+      using (PMF.map_apply (transcriptCommitTuple VC)
+        (run_adversary_transcript (VC := VC) (cs := cs) A x secParam) comm_tuple)
+  simpa using h_map.symm
+
+lemma commitMass_eq_uniform_randomness_sum
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ)
+    (comm_tuple : VC.Commitment × VC.Commitment × VC.Commitment × VC.Commitment) :
+    commitMass VC cs A x secParam comm_tuple =
+      ∑ rand : Fin secParam.succ,
+        commitSeedWeight VC cs A x secParam comm_tuple rand := by
+  classical
+  have h_commit :=
+    commitMass_eq_run_adversary_commit_tuple (VC := VC) (cs := cs) (A := A)
+      (x := x) (secParam := secParam) (comm_tuple := comm_tuple)
+  have h_map :=
+    run_adversary_commit_tuple_eq_map_commitTupleOfRandomness (VC := VC)
+      (cs := cs) (A := A) (x := x) (secParam := secParam)
+  have h_eval :=
+    congrArg (fun (pmf : PMF _ ) => pmf comm_tuple) h_map
+  have h_uniform :
+      (PMF.map (commitTupleOfRandomness VC cs A x secParam)
+          (uniform_pmf : PMF (Fin (secParam.succ)))) comm_tuple
+        = ∑ rand : Fin secParam.succ,
+            commitSeedWeight VC cs A x secParam comm_tuple rand := by
+    classical
+    have h_sum :=
+      (PMF.map_apply (commitTupleOfRandomness VC cs A x secParam)
+        (uniform_pmf : PMF (Fin (secParam.succ))) comm_tuple)
+    simpa [commitSeedWeight, PMF.map_apply, tsum_fintype]
+      using h_sum
+  calc
+    commitMass VC cs A x secParam comm_tuple
+        = run_adversary_commit_tuple VC cs A x secParam comm_tuple := h_commit
+    _ = (PMF.map (commitTupleOfRandomness VC cs A x secParam)
+          (uniform_pmf : PMF (Fin (secParam.succ)))) comm_tuple := h_eval
+    _ = ∑ rand : Fin secParam.succ,
+          commitSeedWeight VC cs A x secParam comm_tuple rand := h_uniform
 
 /-- Marginal mass of observing a particular commitment tuple together with a challenge. -/
 noncomputable def commitChallengeMass
