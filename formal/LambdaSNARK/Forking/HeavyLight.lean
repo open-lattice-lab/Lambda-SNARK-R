@@ -387,6 +387,155 @@ lemma heavyCommitMass_eq_uniform_randomness_sum
             heavyCommitSeedWeight VC cs A x secParam ε rand := by
           simp [tsum_fintype]
 
+lemma heavyCommitMass_mul_randomnessCard_eq_heavySeedCount
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ) (ε : ℝ) :
+    heavyCommitMass VC cs A x secParam ε * (secParam.succ : ENNReal) =
+      (Nat.cast
+        (Set.ncard
+          {rand : Fin secParam.succ |
+            commitTupleOfRandomness VC cs A x secParam rand ∈
+              heavyCommitments VC cs A x secParam ε}) : ENNReal) := by
+  classical
+  set heavySet : Set (Fin secParam.succ) :=
+    {rand | commitTupleOfRandomness VC cs A x secParam rand ∈
+      heavyCommitments VC cs A x secParam ε}
+  have h_finite : heavySet.Finite :=
+    (Set.finite_univ (α := Fin secParam.succ)).subset
+      (by intro _ _; trivial)
+  set heavyFinset : Finset (Fin secParam.succ) := h_finite.toFinset
+  have h_mem :
+      ∀ rand : Fin secParam.succ,
+        rand ∈ heavyFinset ↔ rand ∈ heavySet :=
+    fun rand => h_finite.mem_toFinset (a := rand)
+  have h_weights :
+      ∀ rand : Fin secParam.succ,
+        heavyCommitSeedWeight VC cs A x secParam ε rand =
+          if rand ∈ heavyFinset then (secParam.succ : ENNReal)⁻¹ else 0 := by
+    intro rand
+    by_cases h_heavy :
+        commitTupleOfRandomness VC cs A x secParam rand ∈
+          heavyCommitments VC cs A x secParam ε
+    · have h_set : rand ∈ heavyFinset :=
+        (h_mem rand).2 (by
+          change commitTupleOfRandomness VC cs A x secParam rand ∈
+            heavyCommitments VC cs A x secParam ε
+          exact h_heavy)
+      have h_uniform :
+          (uniform_pmf : PMF (Fin (secParam.succ))) rand =
+            (↑secParam + 1 : ENNReal)⁻¹ := by
+        unfold uniform_pmf
+        change (Fintype.card (Fin (secParam.succ)) : ENNReal)⁻¹ =
+          (↑secParam + 1 : ENNReal)⁻¹
+        simp [Fintype.card_fin, Nat.cast_succ]
+      simp [heavyCommitSeedWeight, h_heavy, h_set, h_uniform, Nat.cast_succ]
+    · have h_set : rand ∉ heavyFinset := by
+        intro h_mem_fin
+        have h_set_mem : rand ∈ heavySet := (h_mem rand).1 h_mem_fin
+        change commitTupleOfRandomness VC cs A x secParam rand ∈
+          heavyCommitments VC cs A x secParam ε at h_set_mem
+        exact h_heavy h_set_mem
+      simp [heavyCommitSeedWeight, h_heavy, h_set]
+  have h_sum_indicator :
+      (∑ rand : Fin secParam.succ,
+          heavyCommitSeedWeight VC cs A x secParam ε rand) =
+        ∑ rand : Fin secParam.succ,
+            if rand ∈ heavyFinset then (secParam.succ : ENNReal)⁻¹ else 0 := by
+    refine Finset.sum_congr rfl ?_
+    intro rand _
+    exact h_weights rand
+  have h_filter :
+      (Finset.univ.filter
+          fun rand : Fin secParam.succ => rand ∈ heavyFinset) = heavyFinset := by
+    ext rand
+    by_cases h : rand ∈ heavyFinset
+    · simp [h]
+    · simp [h]
+  have h_sum_const :
+      (∑ rand : Fin secParam.succ,
+          if rand ∈ heavyFinset then (secParam.succ : ENNReal)⁻¹ else 0) =
+        (heavyFinset.card : ENNReal) * (secParam.succ : ENNReal)⁻¹ := by
+    have h_filtered_aux :=
+      (Finset.sum_filter
+          (s := (Finset.univ : Finset (Fin secParam.succ)))
+          (p := fun rand : Fin secParam.succ => rand ∈ heavyFinset)
+          (f := fun _ => (secParam.succ : ENNReal)⁻¹)).symm
+    have h_sum_filter :=
+      congrArg
+        (fun s : Finset (Fin secParam.succ) =>
+          ∑ rand ∈ s, (secParam.succ : ENNReal)⁻¹)
+        h_filter
+    have h_filtered :
+        (∑ rand : Fin secParam.succ,
+            if rand ∈ heavyFinset then (secParam.succ : ENNReal)⁻¹ else 0) =
+          ∑ rand ∈ heavyFinset, (secParam.succ : ENNReal)⁻¹ :=
+      h_filtered_aux.trans h_sum_filter
+    have h_sum :
+        ∑ rand ∈ heavyFinset, (secParam.succ : ENNReal)⁻¹ =
+          (heavyFinset.card : ENNReal) * (secParam.succ : ENNReal)⁻¹ := by
+      simp [Finset.sum_const, nsmul_eq_mul]
+    exact h_filtered.trans h_sum
+  have h_card_nat : heavySet.ncard = heavyFinset.card :=
+    Set.ncard_eq_toFinset_card (s := heavySet) (hs := h_finite)
+  have h_card_eq :
+      ((Set.ncard heavySet : ℕ) : ENNReal) =
+        (heavyFinset.card : ENNReal) :=
+    congrArg (fun n : ℕ => (n : ENNReal)) h_card_nat
+  have h_succ_ne_zero : (secParam.succ : ENNReal) ≠ 0 := by
+    exact_mod_cast Nat.succ_ne_zero secParam
+  have h_succ_ne_top : (secParam.succ : ENNReal) ≠ (⊤ : ENNReal) :=
+    ENNReal.natCast_ne_top _
+  have h_mass_sum :
+      (∑ rand : Fin secParam.succ,
+          heavyCommitSeedWeight VC cs A x secParam ε rand) =
+        (heavyFinset.card : ENNReal) * (secParam.succ : ENNReal)⁻¹ := by
+    calc
+      (∑ rand : Fin secParam.succ,
+          heavyCommitSeedWeight VC cs A x secParam ε rand)
+          = ∑ rand : Fin secParam.succ,
+              if rand ∈ heavyFinset then (secParam.succ : ENNReal)⁻¹ else 0 :=
+                h_sum_indicator
+      _ = (heavyFinset.card : ENNReal) * (secParam.succ : ENNReal)⁻¹ :=
+        h_sum_const
+  have h_cancel_raw :
+      (secParam.succ : ENNReal) * (secParam.succ : ENNReal)⁻¹ = 1 :=
+    ENNReal.mul_inv_cancel h_succ_ne_zero h_succ_ne_top
+  have h_cancel :
+      (secParam.succ : ENNReal)⁻¹ * (secParam.succ : ENNReal) = 1 := by
+    simpa [mul_comm] using h_cancel_raw
+  calc
+    heavyCommitMass VC cs A x secParam ε * (secParam.succ : ENNReal)
+        =
+          (∑ rand : Fin secParam.succ,
+              heavyCommitSeedWeight VC cs A x secParam ε rand)
+            * (secParam.succ : ENNReal) := by
+              simp [heavyCommitMass_eq_uniform_randomness_sum]
+    _ =
+        ((heavyFinset.card : ENNReal) * (secParam.succ : ENNReal)⁻¹) *
+          (secParam.succ : ENNReal) := by
+            rw [h_mass_sum]
+    _ = (heavyFinset.card : ENNReal) := by
+          have h_mul_assoc :
+              ((heavyFinset.card : ENNReal) * (secParam.succ : ENNReal)⁻¹) *
+                  (secParam.succ : ENNReal)
+                  = (heavyFinset.card : ENNReal) *
+                      ((secParam.succ : ENNReal)⁻¹ *
+                        (secParam.succ : ENNReal)) := by
+            simpa using
+              (mul_assoc (heavyFinset.card : ENNReal)
+                ((secParam.succ : ENNReal)⁻¹)
+                (secParam.succ : ENNReal))
+          have h_value :=
+            congrArg (fun t : ENNReal => (heavyFinset.card : ENNReal) * t) h_cancel
+          have h_value' :
+              (heavyFinset.card : ENNReal) *
+                  ((secParam.succ : ENNReal)⁻¹ * (secParam.succ : ENNReal)) =
+                (heavyFinset.card : ENNReal) :=
+            h_value.trans (by simp)
+          exact h_mul_assoc.trans h_value'
+    _ = (Nat.cast (Set.ncard heavySet) : ENNReal) := h_card_eq.symm
+
 lemma tsum_commitMass_eq_one
     {F : Type} [Field F] [Fintype F] [DecidableEq F]
     (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
