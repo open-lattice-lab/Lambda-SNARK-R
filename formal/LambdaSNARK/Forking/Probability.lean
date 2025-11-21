@@ -422,6 +422,31 @@ lemma run_adversary_commit_tuple_eq_map_commitTupleOfRandomness
 
 end SingleRun
 
+lemma uniform_pmf_apply_ne_zero {α : Type*} [Fintype α] [Nonempty α]
+    (a : α) : (uniform_pmf : PMF α) a ≠ 0 := by
+  classical
+  have h_card_ne_zero : (Fintype.card α : ENNReal) ≠ 0 := by
+    have h_pos : 0 < Fintype.card α := Fintype.card_pos
+    exact_mod_cast (Nat.pos_iff_ne_zero.mp h_pos)
+  have h_card_ne_top : (Fintype.card α : ENNReal) ≠ ⊤ :=
+    ENNReal.natCast_ne_top (Fintype.card α)
+  intro h_zero
+  dsimp [uniform_pmf] at h_zero
+  have h_const_zero : (Fintype.card α : ENNReal)⁻¹ = 0 := h_zero
+  have h_zero' :
+      (Fintype.card α : ENNReal) * (Fintype.card α : ENNReal)⁻¹ = 0 := by
+    simp [h_const_zero]
+  have h_one :
+      (Fintype.card α : ENNReal) * (Fintype.card α : ENNReal)⁻¹ = 1 :=
+    ENNReal.mul_inv_cancel h_card_ne_zero h_card_ne_top
+  have : (0 : ENNReal) = 1 := by
+    calc
+      (0 : ENNReal)
+          = (Fintype.card α : ENNReal) * (Fintype.card α : ENNReal)⁻¹ := by
+            simp [h_zero']
+      _ = 1 := by simpa using h_one
+  exact zero_ne_one this
+
 section SuccessMass
 
 variable {F : Type} [Field F] [Fintype F] [DecidableEq F]
@@ -710,6 +735,56 @@ lemma mem_support_run_adversary {F : Type} [CommRing F] [Fintype F] [DecidableEq
             opening_quotient_α := proof.opening_quotient_α
             valid := verify VC cs x proof })) (a' := sample)).1 h_pure
   simpa [run_adversary] using h_eq
+
+lemma exists_randomness_of_mem_support_run_adversary_transcript
+    {F : Type} [CommRing F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ)
+    {t : Transcript F VC}
+    (h_mem : t ∈ (run_adversary_transcript (VC := VC) (cs := cs) A x secParam).support) :
+    ∃ rand : Fin secParam.succ,
+      transcriptOfRandomness VC cs A x secParam rand = t := by
+  classical
+  have h_map :=
+    run_adversary_transcript_eq_map_transcriptOfRandomness VC cs A x secParam
+  have h_mem' :
+      t ∈ (PMF.map (transcriptOfRandomness VC cs A x secParam)
+        (uniform_pmf : PMF (Fin (secParam.succ)))).support := by
+    simpa [h_map]
+      using h_mem
+  obtain ⟨rand, -, h_eq⟩ :=
+    (PMF.mem_support_map_iff
+      (f := transcriptOfRandomness VC cs A x secParam)
+      (p := (uniform_pmf : PMF (Fin (secParam.succ))))
+      (b := t)).1 h_mem'
+  exact ⟨rand, h_eq⟩
+
+lemma adversarySample_mem_support_run_adversary
+    {F : Type} [CommRing F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F)
+    (A : Adversary F VC) (x : PublicInput F cs.nPub)
+    (secParam : ℕ) (rand : Fin secParam.succ) :
+    adversarySample VC cs A x secParam rand
+      ∈ (run_adversary (VC := VC) (cs := cs) A x secParam).support := by
+  classical
+  have h_unif_mem :
+      rand ∈ (uniform_pmf : PMF (Fin (secParam.succ))).support := by
+    have h_ne : (uniform_pmf : PMF (Fin (secParam.succ))) rand ≠ 0 :=
+      uniform_pmf_apply_ne_zero rand
+    exact (PMF.mem_support_iff
+      (p := (uniform_pmf : PMF (Fin (secParam.succ)))) (a := rand)).2 h_ne
+  have h_map :=
+    run_adversary_eq_map_adversarySample VC cs A x secParam
+  have h_mem_map :
+      adversarySample VC cs A x secParam rand ∈
+        (PMF.map (adversarySample VC cs A x secParam)
+          (uniform_pmf : PMF (Fin (secParam.succ)))).support := by
+    refine (PMF.mem_support_map_iff
+      (f := adversarySample VC cs A x secParam)
+      (p := (uniform_pmf : PMF (Fin (secParam.succ))))
+      (b := adversarySample VC cs A x secParam rand)).2 ?_
+    exact ⟨rand, h_unif_mem, rfl⟩
+  simpa [h_map] using h_mem_map
 
 /-- Replay adversary with same commitments but different challenge.
     Core of forking lemma: reuse randomness, resample challenge. -/

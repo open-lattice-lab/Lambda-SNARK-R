@@ -2251,6 +2251,8 @@ lemma exists_heavyRandomness_successfulChallenge_of_successProbability_gt
     (h_pos : 0 < ε)
     (h_gap : ε < successProbability VC cs A x secParam) :
     ∃ (rand : Fin secParam.succ) (α : F) (t : Transcript F VC),
+      commitTupleOfRandomness VC cs A x secParam rand ∈
+        heavyCommitments VC cs A x secParam ε ∧
       success_event VC cs x t ∧
       transcriptCommitTuple VC t =
         commitTupleOfRandomness VC cs A x secParam rand ∧
@@ -2271,7 +2273,7 @@ lemma exists_heavyRandomness_successfulChallenge_of_successProbability_gt
     exact_mod_cast h_card_pos_real
   obtain ⟨α, hα_mem⟩ := Finset.card_pos.mp h_card_pos
   obtain ⟨t, h_success, h_comm, h_alpha, h_run_pos⟩ := h_valid α hα_mem
-  refine ⟨rand, α, t, h_success, ?_, h_alpha, h_run_pos⟩
+  refine ⟨rand, α, t, h_heavy_rand, h_success, ?_, h_alpha, h_run_pos⟩
   simpa using h_comm
 
 lemma heavyCommitment_scaled_witnesses

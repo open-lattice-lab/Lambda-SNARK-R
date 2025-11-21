@@ -162,6 +162,115 @@ lemma heavyCommitment_mem_is_heavy
     exact ⟨t, h_success, h_commit, h_alpha⟩
   · simpa using h_card
 
+/-- A strictly positive success margin implies the existence of an explicit
+    randomness seed producing a successful transcript of positive mass. -/
+lemma exists_randomness_successful_transcript_of_successProbability_gt
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ) (ε : ℝ)
+    (h_pos : 0 < ε)
+    (h_gap : ε < successProbability VC cs A x secParam) :
+    ∃ (rand : Fin secParam.succ) (t : Transcript F VC),
+      rand ∈ heavyRandomnessFinset (VC := VC) (cs := cs) (A := A)
+        (x := x) (secParam := secParam) ε ∧
+      success_event VC cs x t ∧
+      transcriptOfRandomness VC cs A x secParam rand = t ∧
+      transcriptCommitTuple VC t =
+        commitTupleOfRandomness VC cs A x secParam rand ∧
+      0 < (run_adversary_transcript (VC := VC) (cs := cs) A x secParam) t := by
+  classical
+  obtain ⟨rand_heavy, α, t, h_heavy_rand_heavy, h_success, h_commit, _h_alpha, h_run_pos⟩ :=
+    _root_.LambdaSNARK.exists_heavyRandomness_successfulChallenge_of_successProbability_gt
+      (VC := VC) (cs := cs) (A := A) (x := x) (secParam := secParam)
+      (ε := ε) h_pos h_gap
+  have h_support : t ∈
+      (run_adversary_transcript (VC := VC) (cs := cs) A x secParam).support := by
+    have h_ne :
+        (run_adversary_transcript (VC := VC) (cs := cs) A x secParam) t ≠ 0 :=
+      ne_of_gt h_run_pos
+    exact (PMF.mem_support_iff (p :=
+      run_adversary_transcript (VC := VC) (cs := cs) A x secParam)
+      (a := t)).mpr h_ne
+  obtain ⟨rand, h_rand_eq⟩ :=
+    exists_randomness_of_mem_support_run_adversary_transcript
+      (VC := VC) (cs := cs) (A := A) (x := x) (secParam := secParam)
+      (t := t) h_support
+  have h_commit_rand :
+      commitTupleOfRandomness VC cs A x secParam rand =
+        transcriptCommitTuple VC t := by
+    simp [commitTupleOfRandomness, h_rand_eq]
+  have h_heavy_transcript :
+      transcriptCommitTuple VC t ∈ heavyCommitments VC cs A x secParam ε := by
+    simpa [h_commit] using h_heavy_rand_heavy
+  have h_heavy_rand :
+      commitTupleOfRandomness VC cs A x secParam rand ∈
+        heavyCommitments VC cs A x secParam ε := by
+    simpa [h_commit_rand] using h_heavy_transcript
+  have h_rand_mem :
+      rand ∈ heavyRandomnessFinset (VC := VC) (cs := cs) (A := A)
+        (x := x) (secParam := secParam) ε :=
+    (mem_heavyRandomnessFinset (VC := VC) (cs := cs) (A := A)
+      (x := x) (secParam := secParam) (ε := ε)).2 h_heavy_rand
+  have h_commit_rand' :
+      transcriptCommitTuple VC t =
+        commitTupleOfRandomness VC cs A x secParam rand :=
+    h_commit_rand.symm
+  exact ⟨rand, t, h_rand_mem, h_success, h_rand_eq, h_commit_rand', h_run_pos⟩
+
+lemma exists_heavy_sample_success_of_successProbability_gt
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ) (ε : ℝ)
+    (h_pos : 0 < ε)
+    (h_gap : ε < successProbability VC cs A x secParam) :
+    ∃ rand,
+      rand ∈ heavyRandomnessFinset (VC := VC) (cs := cs) (A := A)
+        (x := x) (secParam := secParam) ε ∧
+      success_event VC cs x ((adversarySample VC cs A x secParam rand).2) ∧
+      (adversarySample VC cs A x secParam rand)
+        ∈ (run_adversary (VC := VC) (cs := cs) A x secParam).support ∧
+      0 < (run_adversary_transcript (VC := VC) (cs := cs) A x secParam)
+        ((adversarySample VC cs A x secParam rand).2) := by
+  classical
+  obtain ⟨rand, t, h_rand_mem, h_success, h_rand_eq, _h_commit, h_run_pos⟩ :=
+    exists_randomness_successful_transcript_of_successProbability_gt
+      (VC := VC) (cs := cs) (A := A) (x := x) (secParam := secParam)
+      (ε := ε) h_pos h_gap
+  have h_sample_transcript :
+      (adversarySample VC cs A x secParam rand).2 = t := h_rand_eq
+  have h_success_sample :
+      success_event VC cs x ((adversarySample VC cs A x secParam rand).2) := by
+    simpa [h_sample_transcript]
+      using h_success
+  have h_support_sample :
+      adversarySample VC cs A x secParam rand
+        ∈ (run_adversary (VC := VC) (cs := cs) A x secParam).support := by
+    have h_unif_mem :
+        rand ∈ (uniform_pmf : PMF (Fin (secParam.succ))).support := by
+      have h_ne :
+          (uniform_pmf : PMF (Fin (secParam.succ))) rand ≠ 0 :=
+        uniform_pmf_apply_ne_zero rand
+      exact (PMF.mem_support_iff
+        (p := (uniform_pmf : PMF (Fin (secParam.succ)))) (a := rand)).2 h_ne
+    have h_map :=
+      run_adversary_eq_map_adversarySample VC cs A x secParam
+    have h_mem_map :
+        adversarySample VC cs A x secParam rand ∈
+          (PMF.map (adversarySample VC cs A x secParam)
+            (uniform_pmf : PMF (Fin (secParam.succ)))).support := by
+      refine (PMF.mem_support_map_iff
+        (f := adversarySample VC cs A x secParam)
+        (p := (uniform_pmf : PMF (Fin (secParam.succ))))
+        (b := adversarySample VC cs A x secParam rand)).2 ?_
+      exact ⟨rand, h_unif_mem, rfl⟩
+    simpa [h_map] using h_mem_map
+  have h_run_pos_sample :
+      0 < (run_adversary_transcript (VC := VC) (cs := cs) A x secParam)
+        ((adversarySample VC cs A x secParam rand).2) := by
+    simpa [h_sample_transcript]
+      using h_run_pos
+  exact ⟨rand, h_rand_mem, h_success_sample, h_support_sample, h_run_pos_sample⟩
+
 /-!
 ## WARNING: Axiomatized Heavy Theorems
 
