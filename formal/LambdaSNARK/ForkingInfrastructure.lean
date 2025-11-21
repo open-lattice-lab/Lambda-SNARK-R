@@ -366,6 +366,89 @@ lemma successMass_eq_uniform_randomness_success_count
             (x := x) (secParam := secParam)).card : ENNReal) *
         (secParam.succ : ENNReal)⁻¹ := h_const_sum
 
+lemma ENNReal.toReal_inv_natSucc (n : ℕ) :
+    ((n.succ : ENNReal)⁻¹).toReal = (n.succ : ℝ)⁻¹ := by
+  have h_ne_zero : (n.succ : ENNReal) ≠ 0 := by
+    exact_mod_cast (Nat.succ_ne_zero n)
+  have h_ne_top : (n.succ : ENNReal) ≠ (⊤ : ENNReal) :=
+    ENNReal.natCast_ne_top _
+  have h_prod := ENNReal.mul_inv_cancel h_ne_zero h_ne_top
+  have h_prod_toReal := congrArg ENNReal.toReal h_prod
+  have h_mul :
+      (n.succ : ℝ) * ((n.succ : ENNReal)⁻¹).toReal = 1 := by
+    simpa [ENNReal.toReal_mul]
+      using h_prod_toReal
+  have h_nonzero : (n.succ : ℝ) ≠ 0 := by
+    exact_mod_cast (Nat.succ_ne_zero n)
+  have h_inv : (n.succ : ℝ) * (n.succ : ℝ)⁻¹ = (1 : ℝ) := by
+    have h' : (n.succ : ℝ) ≠ 0 := h_nonzero
+    simpa [div_eq_mul_inv, h'] using (div_self (a := (n.succ : ℝ)) h')
+  have h_eq :
+      (n.succ : ℝ) * ((n.succ : ENNReal)⁻¹).toReal =
+        (n.succ : ℝ) * (n.succ : ℝ)⁻¹ :=
+    h_mul.trans h_inv.symm
+  exact (mul_left_cancel₀ h_nonzero) h_eq
+
+lemma successProbability_eq_successfulRandomness_card_div
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ) :
+    successProbability VC cs A x secParam =
+      ((successfulRandomnessFinset (VC := VC) (cs := cs) (A := A)
+          (x := x) (secParam := secParam)).card : ℝ) /
+        (secParam.succ : ℝ) := by
+  classical
+  have h_mass_eq :=
+    successMass_eq_uniform_randomness_success_count (VC := VC) (cs := cs)
+      (A := A) (x := x) (secParam := secParam)
+  have h_prob :=
+    successProbability_toReal_successMass (VC := VC) (cs := cs)
+      (A := A) (x := x) (secParam := secParam)
+  set successCard : ENNReal :=
+    ((successfulRandomnessFinset (VC := VC) (cs := cs) (A := A)
+        (x := x) (secParam := secParam)).card : ENNReal)
+  have h_mass_toReal :
+      (successMass VC cs A x secParam).toReal =
+        (successCard * (secParam.succ : ENNReal)⁻¹).toReal := by
+    simpa [successCard] using congrArg ENNReal.toReal h_mass_eq
+  have h_mul_toReal :=
+    ENNReal.toReal_mul (a := successCard) (b := (secParam.succ : ENNReal)⁻¹)
+  have h_card_toReal : successCard.toReal =
+      (successfulRandomnessFinset (VC := VC) (cs := cs) (A := A)
+          (x := x) (secParam := secParam)).card := by
+    simp [successCard]
+  have h_inv_toReal :
+      ((secParam.succ : ENNReal)⁻¹).toReal = (secParam.succ : ℝ)⁻¹ := by
+    simpa using ENNReal.toReal_inv_natSucc secParam
+  have h_card_mul :
+      successCard.toReal * ((secParam.succ : ENNReal)⁻¹).toReal =
+        ((successfulRandomnessFinset (VC := VC) (cs := cs) (A := A)
+            (x := x) (secParam := secParam)).card : ℝ) *
+          (secParam.succ : ℝ)⁻¹ := by
+    calc
+      successCard.toReal * ((secParam.succ : ENNReal)⁻¹).toReal
+          = ((successfulRandomnessFinset (VC := VC) (cs := cs) (A := A)
+              (x := x) (secParam := secParam)).card : ℝ) *
+              ((secParam.succ : ENNReal)⁻¹).toReal := by
+            rw [h_card_toReal]
+      _ = ((successfulRandomnessFinset (VC := VC) (cs := cs) (A := A)
+              (x := x) (secParam := secParam)).card : ℝ) *
+            (secParam.succ : ℝ)⁻¹ := by
+            rw [h_inv_toReal]
+  calc
+    successProbability VC cs A x secParam
+        = (successMass VC cs A x secParam).toReal := h_prob
+    _ = (successCard * (secParam.succ : ENNReal)⁻¹).toReal := h_mass_toReal
+    _ = successCard.toReal * ((secParam.succ : ENNReal)⁻¹).toReal :=
+      h_mul_toReal
+    _ = ((successfulRandomnessFinset (VC := VC) (cs := cs) (A := A)
+            (x := x) (secParam := secParam)).card : ℝ) *
+          (secParam.succ : ℝ)⁻¹ := h_card_mul
+    _ = ((successfulRandomnessFinset (VC := VC) (cs := cs) (A := A)
+            (x := x) (secParam := secParam)).card : ℝ) /
+          (secParam.succ : ℝ) := by
+          simp [div_eq_mul_inv]
+
 /-!
 ## WARNING: Axiomatized Heavy Theorems
 
