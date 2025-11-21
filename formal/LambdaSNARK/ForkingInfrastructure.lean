@@ -271,6 +271,101 @@ lemma exists_heavy_sample_success_of_successProbability_gt
       using h_run_pos
   exact ⟨rand, h_rand_mem, h_success_sample, h_support_sample, h_run_pos_sample⟩
 
+/-- Finite set of randomness seeds whose transcripts validate in the first adversary run. -/
+noncomputable def successfulRandomnessFinset
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ) : Finset (Fin secParam.succ) := by
+  classical
+  exact (Finset.univ : Finset (Fin secParam.succ)).filter fun rand =>
+    success_event VC cs x
+      (transcriptOfRandomness VC cs A x secParam rand)
+
+lemma mem_successfulRandomnessFinset
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ)
+    {rand : Fin secParam.succ} :
+    rand ∈ successfulRandomnessFinset (VC := VC) (cs := cs) (A := A)
+        (x := x) (secParam := secParam) ↔
+      success_event VC cs x
+        (transcriptOfRandomness VC cs A x secParam rand) := by
+  classical
+  simp [successfulRandomnessFinset]
+
+lemma successMass_eq_uniform_randomness_success_count
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ) :
+    successMass VC cs A x secParam =
+      ((successfulRandomnessFinset (VC := VC) (cs := cs) (A := A)
+          (x := x) (secParam := secParam)).card : ENNReal) *
+        (secParam.succ : ENNReal)⁻¹ := by
+  classical
+  have h_mass :=
+    successMass_eq_uniform_randomness_tsum (VC := VC) (cs := cs)
+      (A := A) (x := x) (secParam := secParam)
+  have h_sum_congr :
+      (∑ rand : Fin secParam.succ,
+        successSeedWeight VC cs A x secParam rand) =
+        ∑ rand : Fin secParam.succ,
+          (if success_event VC cs x
+              (transcriptOfRandomness VC cs A x secParam rand)
+            then (secParam.succ : ENNReal)⁻¹ else 0) := by
+    refine Finset.sum_congr rfl ?_
+    intro rand _
+    by_cases h_success :
+        success_event VC cs x
+          (transcriptOfRandomness VC cs A x secParam rand)
+    ·
+      have := LambdaSNARK.uniform_pmf_apply_fin (n := secParam) (rand := rand)
+      simp [successSeedWeight, h_success, this]
+    · simp [successSeedWeight, h_success]
+  have h_filtered :
+      (∑ rand : Fin secParam.succ,
+          (if success_event VC cs x
+              (transcriptOfRandomness VC cs A x secParam rand)
+            then (secParam.succ : ENNReal)⁻¹ else 0))
+        =
+          ∑ rand ∈
+              successfulRandomnessFinset (VC := VC) (cs := cs) (A := A)
+                (x := x) (secParam := secParam),
+            (secParam.succ : ENNReal)⁻¹ := by
+    classical
+    simpa [successfulRandomnessFinset]
+      using
+        (Finset.sum_filter
+            (s := (Finset.univ : Finset (Fin secParam.succ)))
+            (f := fun _ => (secParam.succ : ENNReal)⁻¹)
+            (p := fun rand =>
+              success_event VC cs x
+                (transcriptOfRandomness VC cs A x secParam rand))).symm
+  have h_const_sum :
+      (∑ rand ∈
+          successfulRandomnessFinset (VC := VC) (cs := cs) (A := A)
+            (x := x) (secParam := secParam),
+        (secParam.succ : ENNReal)⁻¹)
+        =
+          ((successfulRandomnessFinset (VC := VC) (cs := cs) (A := A)
+              (x := x) (secParam := secParam)).card : ENNReal) *
+            (secParam.succ : ENNReal)⁻¹ := by
+    simp [Finset.sum_const, nsmul_eq_mul]
+  calc
+    successMass VC cs A x secParam
+        = ∑ rand : Fin secParam.succ,
+            successSeedWeight VC cs A x secParam rand := h_mass
+    _ = ∑ rand : Fin secParam.succ,
+            (if success_event VC cs x
+                (transcriptOfRandomness VC cs A x secParam rand)
+              then (secParam.succ : ENNReal)⁻¹ else 0) := h_sum_congr
+    _ = ∑ rand ∈
+            successfulRandomnessFinset (VC := VC) (cs := cs) (A := A)
+              (x := x) (secParam := secParam),
+          (secParam.succ : ENNReal)⁻¹ := h_filtered
+    _ = ((successfulRandomnessFinset (VC := VC) (cs := cs) (A := A)
+            (x := x) (secParam := secParam)).card : ENNReal) *
+        (secParam.succ : ENNReal)⁻¹ := h_const_sum
+
 /-!
 ## WARNING: Axiomatized Heavy Theorems
 

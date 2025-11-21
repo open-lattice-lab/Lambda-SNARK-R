@@ -106,6 +106,12 @@ noncomputable def uniform_pmf {α : Type*} [Fintype α] [Nonempty α] : PMF α :
      exact h_summable.hasSum
    ⟩
 
+lemma uniform_pmf_apply_fin (n : ℕ) (rand : Fin n.succ) :
+    (uniform_pmf : PMF (Fin n.succ)) rand = (n.succ : ENNReal)⁻¹ := by
+  classical
+  change (Fintype.card (Fin n.succ) : ENNReal)⁻¹ = (n.succ : ENNReal)⁻¹
+  simp [Fintype.card_fin]
+
 /-- Uniform distribution excluding one element.
 
     PMF where each element in α \ {x} has probability 1/(|α| - 1).
