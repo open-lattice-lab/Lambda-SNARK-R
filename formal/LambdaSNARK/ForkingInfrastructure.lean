@@ -326,6 +326,100 @@ lemma exists_heavyCommitment_of_successProbability_ge
   exact exists_heavyCommitment_of_successProbability_lt (VC := VC) (cs := cs)
     (A := A) (x := x) (secParam := secParam) (ε := δ) hδ_lt
 
+lemma heavy_randomness_lower_bound
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ) (ε : ℝ)
+    (h_nonneg : 0 ≤ ε) :
+    (successProbability VC cs A x secParam - ε) * (secParam.succ : ℝ) ≤
+      (heavyRandomnessFinset (VC := VC) (cs := cs) (A := A)
+        (x := x) (secParam := secParam) ε).card := by
+  classical
+  simpa using
+    heavyRandomness_finset_lower_bound (VC := VC) (cs := cs) (A := A)
+      (x := x) (secParam := secParam) (ε := ε) h_nonneg
+
+lemma heavy_randomness_card_le_randomness_mul_heavyCommit_image
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) [DecidableEq VC.Commitment]
+    (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ) (ε : ℝ) :
+    (heavyRandomnessFinset (VC := VC) (cs := cs) (A := A)
+        (x := x) (secParam := secParam) ε).card ≤
+      secParam.succ *
+        ((heavyRandomnessFinset (VC := VC) (cs := cs) (A := A)
+            (x := x) (secParam := secParam) ε).image
+          (fun rand =>
+            commitTupleOfRandomness VC cs A x secParam rand)).card := by
+  classical
+  set S :=
+    heavyRandomnessFinset (VC := VC) (cs := cs) (A := A)
+      (x := x) (secParam := secParam) ε
+    with hS
+  set imageComm :=
+    S.image (fun rand => commitTupleOfRandomness VC cs A x secParam rand)
+    with hImage
+  have h_mem_image :
+      ∀ rand ∈ S,
+        commitTupleOfRandomness VC cs A x secParam rand ∈ imageComm := by
+    intro rand h_rand
+    change commitTupleOfRandomness VC cs A x secParam rand ∈
+        S.image (fun rand => commitTupleOfRandomness VC cs A x secParam rand)
+    refine Finset.mem_image.mpr ?_
+    exact ⟨rand, h_rand, rfl⟩
+  let domain := {rand : Fin secParam.succ // rand ∈ S}
+  let codomain :=
+    {comm : VC.Commitment × VC.Commitment × VC.Commitment × VC.Commitment //
+        comm ∈ imageComm} × Fin secParam.succ
+  let g : domain → codomain := fun rand =>
+    let randVal := rand.val
+    let h_rand_mem : randVal ∈ S := rand.property
+    let h_comm_mem := h_mem_image randVal h_rand_mem
+    ⟨⟨commitTupleOfRandomness VC cs A x secParam randVal, h_comm_mem⟩, randVal⟩
+  have h_inj : Function.Injective g := by
+    intro rand₁ rand₂ h_eq
+    apply Subtype.ext
+    have := congrArg Prod.snd h_eq
+    simpa [g] using this
+  have h_card_le :
+      Fintype.card domain ≤ Fintype.card codomain :=
+    Fintype.card_le_of_injective g h_inj
+  have h_domain_card : Fintype.card domain = S.card := by
+    simp [domain, S]
+  have h_codomain_card : Fintype.card codomain =
+      secParam.succ * imageComm.card := by
+    have h : Fintype.card codomain = imageComm.card * secParam.succ := by
+      simp [codomain, imageComm, Fintype.card_prod, Fintype.card_fin]
+    simpa [Nat.mul_comm] using h
+  simpa [h_domain_card, h_codomain_card, S, imageComm] using h_card_le
+
+lemma heavy_randomness_card_le_randomness_mul_heavyCommit_image_real
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) [DecidableEq VC.Commitment]
+    (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ) (ε : ℝ) :
+    ((heavyRandomnessFinset (VC := VC) (cs := cs) (A := A)
+        (x := x) (secParam := secParam) ε).card : ℝ) ≤
+      (secParam.succ : ℝ) *
+        (((heavyRandomnessFinset (VC := VC) (cs := cs) (A := A)
+            (x := x) (secParam := secParam) ε).image
+          (fun rand =>
+            commitTupleOfRandomness VC cs A x secParam rand)).card : ℝ) := by
+  classical
+  have h_nat :=
+    heavy_randomness_card_le_randomness_mul_heavyCommit_image (VC := VC)
+      (cs := cs) (A := A) (x := x) (secParam := secParam) (ε := ε)
+  have h_real :
+      ((heavyRandomnessFinset (VC := VC) (cs := cs) (A := A)
+          (x := x) (secParam := secParam) ε).card : ℝ) ≤
+        (secParam.succ *
+            ((heavyRandomnessFinset (VC := VC) (cs := cs) (A := A)
+              (x := x) (secParam := secParam) ε).image
+              (fun rand =>
+                commitTupleOfRandomness VC cs A x secParam rand)).card : ℝ) := by
+    exact_mod_cast h_nat
+  simpa [Nat.cast_mul] using h_real
+
 /-- If adversary succeeds with probability ≥ ε, then a fraction ≥ ε - 1/|F|
     of commitment choices are "heavy": for each such commitment,
     at least ε|F| challenges lead to accepting proofs.
