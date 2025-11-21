@@ -452,6 +452,87 @@ lemma heavy_randomness_card_le_randomness_mul_heavyCommit_image_real
     exact_mod_cast h_nat
   simpa [Nat.cast_mul] using h_real
 
+lemma heavyCommitMass_toReal_eq_heavyRandomness_fraction
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ) (ε : ℝ) :
+    (heavyCommitMass VC cs A x secParam ε).toReal =
+      ((heavyRandomnessFinset (VC := VC) (cs := cs) (A := A)
+          (x := x) (secParam := secParam) ε).card : ℝ) /
+        (secParam.succ : ℝ) := by
+  classical
+  have h_mul_eq :=
+    heavyCommitMass_toReal_mul_randomnessCard_eq_heavySeedCount
+      (VC := VC) (cs := cs) (A := A) (x := x) (secParam := secParam)
+      (ε := ε)
+  have h_card_eq :=
+    heavyRandomnessFinset_card_cast (VC := VC) (cs := cs) (A := A)
+      (x := x) (secParam := secParam) (ε := ε)
+  have h_succ_pos : 0 < (secParam.succ : ℝ) := by
+    exact_mod_cast Nat.succ_pos secParam
+  have h_succ_ne_zero : (secParam.succ : ℝ) ≠ 0 := ne_of_gt h_succ_pos
+  have h_mul_cast :
+      (heavyCommitMass VC cs A x secParam ε).toReal * (secParam.succ : ℝ) =
+        ((heavyRandomnessFinset (VC := VC) (cs := cs) (A := A)
+            (x := x) (secParam := secParam) ε).card : ℝ) := by
+    simpa [h_card_eq, mul_comm, mul_left_comm, mul_assoc]
+      using h_mul_eq
+  refine (eq_div_iff_mul_eq h_succ_ne_zero).2 ?_
+  simpa [h_card_eq, mul_comm, mul_left_comm, mul_assoc]
+    using h_mul_cast
+
+lemma heavyCommitMass_toReal_le_heavyCommitmentImage_card
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) [DecidableEq VC.Commitment]
+    (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ) (ε : ℝ) :
+    (heavyCommitMass VC cs A x secParam ε).toReal ≤
+      ((heavyCommitmentImageFinset (VC := VC) (cs := cs) (A := A)
+          (x := x) (secParam := secParam) ε).card : ℝ) := by
+  classical
+  have h_mass_times :
+      (heavyCommitMass VC cs A x secParam ε).toReal * (secParam.succ : ℝ) =
+        ((heavyRandomnessFinset (VC := VC) (cs := cs) (A := A)
+            (x := x) (secParam := secParam) ε).card : ℝ) := by
+    have h_cast :=
+      heavyRandomnessFinset_card_cast (VC := VC) (cs := cs) (A := A)
+        (x := x) (secParam := secParam) (ε := ε)
+    have h_eq :=
+      heavyCommitMass_toReal_mul_randomnessCard_eq_heavySeedCount
+        (VC := VC) (cs := cs) (A := A) (x := x) (secParam := secParam)
+        (ε := ε)
+    simpa [h_cast]
+      using h_eq
+  have h_mass_times' :
+      ((heavyRandomnessFinset (VC := VC) (cs := cs) (A := A)
+          (x := x) (secParam := secParam) ε).card : ℝ) =
+        (heavyCommitMass VC cs A x secParam ε).toReal * (secParam.succ : ℝ) := by
+    simpa [mul_comm]
+      using h_mass_times.symm
+  have h_randomness_bound :=
+    heavy_randomness_card_le_randomness_mul_heavyCommit_image_real
+      (VC := VC) (cs := cs) (A := A) (x := x) (secParam := secParam)
+      (ε := ε)
+  have h_mul_bound :
+      (heavyCommitMass VC cs A x secParam ε).toReal * (secParam.succ : ℝ) ≤
+        (secParam.succ : ℝ) *
+          ((heavyCommitmentImageFinset (VC := VC) (cs := cs) (A := A)
+              (x := x) (secParam := secParam) ε).card : ℝ) := by
+    simpa [h_mass_times', mul_comm, mul_left_comm, mul_assoc]
+      using h_randomness_bound
+  have h_pos : 0 < (secParam.succ : ℝ) := by
+    exact_mod_cast Nat.succ_pos secParam
+  have h_mul_bound' :
+      (secParam.succ : ℝ) * (heavyCommitMass VC cs A x secParam ε).toReal ≤
+        (secParam.succ : ℝ) *
+          ((heavyCommitmentImageFinset (VC := VC) (cs := cs) (A := A)
+              (x := x) (secParam := secParam) ε).card : ℝ) := by
+    simpa [mul_comm, mul_left_comm, mul_assoc]
+      using h_mul_bound
+  have h_final := le_of_mul_le_mul_left h_mul_bound' h_pos
+  simpa [mul_comm]
+    using h_final
+
 lemma heavyCommitmentImageFinset_subset_heavyCommitments
     {F : Type} [Field F] [Fintype F] [DecidableEq F]
     (VC : VectorCommitment F) [DecidableEq VC.Commitment]
@@ -553,6 +634,26 @@ lemma heavyCommitmentImageFinset_card_lower_bound
   simpa [heavyCommitmentImageFinset, mul_comm]
     using h_final
 
+lemma heavyCommitmentImageFinset_weighted_card_lower_bound
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) [DecidableEq VC.Commitment]
+    (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ) (ε : ℝ)
+    (h_nonneg : 0 ≤ ε) :
+    (successProbability VC cs A x secParam - ε) * (secParam.succ : ℝ) ≤
+      ((heavyCommitmentImageFinset (VC := VC) (cs := cs) (A := A)
+          (x := x) (secParam := secParam) ε).card : ℝ) * (secParam.succ : ℝ) := by
+  classical
+  have h_lower :=
+    heavyCommitmentImageFinset_card_lower_bound (VC := VC) (cs := cs) (A := A)
+      (x := x) (secParam := secParam) (ε := ε) h_nonneg
+  have h_pos : 0 < (secParam.succ : ℝ) := by
+    exact_mod_cast Nat.succ_pos secParam
+  have h_nonneg' : 0 ≤ (secParam.succ : ℝ) := h_pos.le
+  have := mul_le_mul_of_nonneg_right h_lower h_nonneg'
+  simpa [mul_comm, mul_left_comm, mul_assoc]
+    using this
+
 lemma heavyCommitmentImageFinset_heavy_properties
     {F : Type} [Field F] [Fintype F] [DecidableEq F]
     (VC : VectorCommitment F) [DecidableEq VC.Commitment]
@@ -579,6 +680,85 @@ lemma heavyCommitmentImageFinset_heavy_properties
         (x := x) (secParam := secParam)
         (ε := ε * (Fintype.card F : ℝ)) h_scaled_nonneg
     simpa using h_lower
+
+lemma exists_heavy_commitments_candidate
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) [DecidableEq VC.Commitment]
+    (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ) (ε : ℝ)
+    (h_pos : 0 < ε) :
+    ∃ heavy_comms : Finset (VC.Commitment × VC.Commitment × VC.Commitment × VC.Commitment),
+      (heavy_comms.card : ℝ) ≥
+          successProbability VC cs A x secParam - ε * (Fintype.card F : ℝ) ∧
+      ∀ comm ∈ heavy_comms, is_heavy_commitment VC cs x comm ε := by
+  classical
+  set heavy_comms :=
+    heavyCommitmentImageFinset (VC := VC) (cs := cs) (A := A)
+      (x := x) (secParam := secParam) (ε := ε * (Fintype.card F : ℝ))
+  obtain ⟨h_all, h_card⟩ :=
+    heavyCommitmentImageFinset_heavy_properties (VC := VC) (cs := cs) (A := A)
+      (x := x) (secParam := secParam) (ε := ε) h_pos
+  refine ⟨heavy_comms, ?_, ?_⟩
+  · simpa [heavy_comms] using h_card
+  · intro comm h_comm
+    simpa [heavy_comms] using h_all comm h_comm
+
+lemma exists_heavy_commitments_candidate_weighted
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) [DecidableEq VC.Commitment]
+    (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ) (ε : ℝ)
+    (h_pos : 0 < ε)
+    (h_nonneg : 0 ≤ ε)
+    (h_card_pos : (Fintype.card F : ℝ) > 0) :
+    ∃ heavy_comms : Finset (VC.Commitment × VC.Commitment × VC.Commitment × VC.Commitment),
+      ((heavy_comms.card : ℝ) * (secParam.succ : ℝ)) ≥
+          (successProbability VC cs A x secParam - ε * (Fintype.card F : ℝ)) *
+            (secParam.succ : ℝ) ∧
+      ∀ comm ∈ heavy_comms, is_heavy_commitment VC cs x comm ε := by
+  classical
+  have h_card_nonneg : 0 ≤ (Fintype.card F : ℝ) := le_of_lt h_card_pos
+  have h_scaled_nonneg : 0 ≤ ε * (Fintype.card F : ℝ) :=
+    mul_nonneg h_nonneg h_card_nonneg
+  set heavy_comms :=
+    heavyCommitmentImageFinset (VC := VC) (cs := cs) (A := A)
+      (x := x) (secParam := secParam) (ε := ε * (Fintype.card F : ℝ))
+  obtain ⟨h_all, h_card⟩ :=
+    heavyCommitmentImageFinset_heavy_properties (VC := VC) (cs := cs) (A := A)
+      (x := x) (secParam := secParam) (ε := ε) h_pos
+  have h_weighted :=
+    heavyCommitmentImageFinset_weighted_card_lower_bound (VC := VC) (cs := cs)
+      (A := A) (x := x) (secParam := secParam)
+      (ε := ε * (Fintype.card F : ℝ)) h_scaled_nonneg
+  have h_card_eq :
+      (((heavyCommitmentImageFinset (VC := VC) (cs := cs) (A := A)
+          (x := x) (secParam := secParam) (ε := ε * (Fintype.card F : ℝ))).card : ℝ) *
+        (secParam.succ : ℝ)) =
+        ((heavy_comms.card : ℝ) * (secParam.succ : ℝ)) := by
+    simp [heavy_comms]
+  refine ⟨heavy_comms, ?_, ?_⟩
+  · have h_coe :
+        ((heavyCommitmentImageFinset (VC := VC) (cs := cs) (A := A)
+            (x := x) (secParam := secParam)
+            (ε := ε * (Fintype.card F : ℝ))).card : ℝ) =
+          (heavy_comms.card : ℝ) := by
+      simp [heavy_comms]
+    have h_weighted' :=
+      show
+          (successProbability VC cs A x secParam - ε * (Fintype.card F : ℝ)) *
+              (secParam.succ : ℝ) ≤
+            (heavy_comms.card : ℝ) * (secParam.succ : ℝ) from by
+        simpa [heavy_comms, h_coe] using h_weighted
+    have h_rewrite :
+        (successProbability VC cs A x secParam - ε * (Fintype.card F : ℝ)) *
+            (secParam.succ : ℝ)
+          = (successProbability VC cs A x secParam -
+              (ε * (Fintype.card F : ℝ))) * (secParam.succ : ℝ) := by
+      simp
+    simpa [h_rewrite]
+      using h_weighted'
+  · intro comm h_comm
+    simpa [heavy_comms] using h_all comm h_comm
 
 /-- If adversary succeeds with probability ≥ ε, then a fraction ≥ ε - 1/|F|
     of commitment choices are "heavy": for each such commitment,
