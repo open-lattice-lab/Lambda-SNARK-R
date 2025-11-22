@@ -795,6 +795,52 @@ lemma sum_uniform_pmf_card
       = (S.card : ENNReal) * (Fintype.card α : ENNReal)⁻¹
   simp [Finset.sum_const, nsmul_eq_mul]
 
+lemma heavyCommitChallengeWeight_sum_finset
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ)
+    (ε : ℝ) (rand : Fin secParam.succ) (S : Finset F) :
+    ∑ α ∈ S, heavyCommitChallengeWeight VC cs A x secParam ε rand α =
+      heavyCommitSeedWeight VC cs A x secParam ε rand *
+        ((S.card : ENNReal) * (Fintype.card F : ENNReal)⁻¹) := by
+  classical
+  by_cases h_mem :
+      commitTupleOfRandomness VC cs A x secParam rand ∈
+        heavyCommitments VC cs A x secParam ε
+  · have h_seed :
+      heavyCommitSeedWeight VC cs A x secParam ε rand =
+        (uniform_pmf : PMF (Fin (secParam.succ))) rand := by
+        simp [heavyCommitSeedWeight, h_mem]
+    have h_uniform_sum :
+        ∑ α ∈ S,
+            heavyCommitChallengeWeight VC cs A x secParam ε rand α
+          = (uniform_pmf : PMF (Fin (secParam.succ))) rand *
+              ((S.card : ENNReal) * (Fintype.card F : ENNReal)⁻¹) := by
+        calc
+          ∑ α ∈ S,
+              heavyCommitChallengeWeight VC cs A x secParam ε rand α
+              = ∑ α ∈ S,
+                  (uniform_pmf : PMF (Fin (secParam.succ))) rand *
+                    (uniform_pmf : PMF F) α := by
+                    simp [heavyCommitChallengeWeight, h_mem]
+          _ = (uniform_pmf : PMF (Fin (secParam.succ))) rand *
+                ∑ α ∈ S, (uniform_pmf : PMF F) α := by
+                  simpa [mul_comm, mul_left_comm, mul_assoc]
+                    using (Finset.mul_sum
+                      (a := (uniform_pmf : PMF (Fin (secParam.succ))) rand)
+                      (s := S)
+                      (f := fun α => (uniform_pmf : PMF F) α)).symm
+          _ = (uniform_pmf : PMF (Fin (secParam.succ))) rand *
+                ((S.card : ENNReal) * (Fintype.card F : ENNReal)⁻¹) := by
+                  simp [sum_uniform_pmf_card (S := S), mul_comm, mul_assoc]
+    have h_final :
+        ∑ α ∈ S,
+            heavyCommitChallengeWeight VC cs A x secParam ε rand α
+          = heavyCommitSeedWeight VC cs A x secParam ε rand *
+              ((S.card : ENNReal) * (Fintype.card F : ENNReal)⁻¹) := by
+      simpa [h_seed, mul_comm, mul_left_comm, mul_assoc] using h_uniform_sum
+    exact h_final
+  · simp [heavyCommitChallengeWeight, heavyCommitSeedWeight, h_mem]
 
 lemma tsum_commitMass_eq_one
     {F : Type} [Field F] [Fintype F] [DecidableEq F]
@@ -2078,6 +2124,27 @@ lemma successfulChallenges_pos_of_mem
   classical
   obtain ⟨_, h_pos⟩ := Finset.mem_filter.1 h_mem
   exact h_pos
+
+lemma heavyCommitChallengeWeight_sum_successfulChallenges
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ)
+    (ε : ℝ) (rand : Fin secParam.succ) :
+    ∑ α ∈ successfulChallenges VC cs A x secParam
+        (commitTupleOfRandomness VC cs A x secParam rand),
+          heavyCommitChallengeWeight VC cs A x secParam ε rand α
+      = heavyCommitSeedWeight VC cs A x secParam ε rand *
+          ((successfulChallenges VC cs A x secParam
+              (commitTupleOfRandomness VC cs A x secParam rand)).card : ENNReal) *
+          (Fintype.card F : ENNReal)⁻¹ := by
+  classical
+  simpa [mul_comm, mul_left_comm, mul_assoc]
+    using
+      (heavyCommitChallengeWeight_sum_finset
+        (VC := VC) (cs := cs) (A := A) (x := x) (secParam := secParam)
+        (ε := ε) (rand := rand)
+        (S := successfulChallenges VC cs A x secParam
+          (commitTupleOfRandomness VC cs A x secParam rand)))
 
 lemma successProbability_le_heavyCommitMass_add
     {F : Type} [Field F] [Fintype F] [DecidableEq F]
