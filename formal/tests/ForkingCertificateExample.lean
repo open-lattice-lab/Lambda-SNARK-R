@@ -177,7 +177,7 @@ lemma stub_remainder_zero :
 
 lemma stub_extraction_soundness
     (x : PublicInput (ZMod 2) trivialR1CS.nPub)
-    (h_sis : ModuleSIS_Hard 256 2 12289 1024) :
+    (h_sis : LambdaSNARK.ModuleSIS_Hard 256 2 12289 1024) :
     satisfies trivialR1CS
       (extract_witness VC trivialR1CS
         (extract_quotient_diff VC trivialR1CS tStub tStubFork
@@ -185,7 +185,8 @@ lemma stub_extraction_soundness
         stubEquations.m stubEquations.ω stubEquations.h_m_vars x) :=
   by
     let assumptions : LambdaSNARK.SoundnessCtx (ZMod 2) VC trivialR1CS :=
-      LambdaSNARK.SoundnessAssumptions.simple (VC := VC) (cs := trivialR1CS) h_sis
+      LambdaSNARK.SoundnessAssumptions.simple (VC := VC) (cs := trivialR1CS)
+        (moduleSIS_holds := h_sis)
     simpa using
       (extraction_soundness (VC := VC) (cs := trivialR1CS)
         (t1 := tStub) (t2 := tStubFork)

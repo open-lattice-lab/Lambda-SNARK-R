@@ -486,10 +486,11 @@ def build
     randomOracle := randomOracle
     randomOracle_holds := randomOracle_holds }
 
-/-- Minimal constructor that only requires the Module-SIS hardness witness. -/
+/-- Minimal constructor that relies on the canonical Module-SIS witness unless overridden. -/
 def simple
     {F : Type} [Field F] (VC : VectorCommitment F) (cs : R1CS F)
-    (moduleSIS_holds : ModuleSIS_Hard 256 2 12289 1024) :
+    (moduleSIS_holds : ModuleSIS_Hard 256 2 12289 1024 :=
+      ModuleSIS_holds 256 2 12289 1024) :
     SoundnessAssumptions F VC cs :=
   build (VC := VC) (cs := cs) (moduleSIS_holds := moduleSIS_holds)
 
