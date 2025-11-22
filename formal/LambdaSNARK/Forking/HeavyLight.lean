@@ -2467,6 +2467,88 @@ lemma successfulChallenges_card_ENNReal_ge_of_heavyCommitment
       _ = ((successfulChallenges VC cs A x secParam comm_tuple).card : ENNReal) := by simp
   simpa [h_left, h_right] using h_mul
 
+lemma heavyCommitChallengeWeight_sum_successfulChallenges_ge
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ)
+    (ε : ℝ) (rand : Fin secParam.succ)
+    (h_mem : commitTupleOfRandomness VC cs A x secParam rand ∈
+      heavyCommitments VC cs A x secParam ε) :
+    heavyCommitSeedWeight VC cs A x secParam ε rand *
+        ENNReal.ofReal ε * (Fintype.card F : ENNReal)⁻¹ ≤
+      ∑ α ∈ successfulChallenges VC cs A x secParam
+          (commitTupleOfRandomness VC cs A x secParam rand),
+        heavyCommitChallengeWeight VC cs A x secParam ε rand α := by
+  classical
+  have h_card :=
+    successfulChallenges_card_ENNReal_ge_of_heavyCommitment (VC := VC) (cs := cs)
+      (A := A) (x := x) (secParam := secParam) (ε := ε)
+      (comm_tuple := commitTupleOfRandomness VC cs A x secParam rand) h_mem
+  have h_sum :=
+    heavyCommitChallengeWeight_sum_successfulChallenges (VC := VC) (cs := cs)
+      (A := A) (x := x) (secParam := secParam) (ε := ε) (rand := rand)
+  have h_mul_left :
+      heavyCommitSeedWeight VC cs A x secParam ε rand * ENNReal.ofReal ε ≤
+        heavyCommitSeedWeight VC cs A x secParam ε rand *
+          ((successfulChallenges VC cs A x secParam
+            (commitTupleOfRandomness VC cs A x secParam rand)).card : ENNReal) := by
+    exact (mul_le_mul_left' h_card _)
+  have h_mul_right :=
+    mul_le_mul_right' h_mul_left ((Fintype.card F : ENNReal)⁻¹)
+  simpa [h_sum, mul_comm, mul_left_comm, mul_assoc] using h_mul_right
+
+lemma heavyCommitChallengeWeight_sum_heavyRandomness_ge
+    {F : Type} [Field F] [Fintype F] [DecidableEq F]
+    (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
+    (x : PublicInput F cs.nPub) (secParam : ℕ)
+    (ε : ℝ)
+    (S : Finset (Fin secParam.succ))
+    (h_subset : S ⊆ heavyRandomnessFinset (VC := VC) (cs := cs) (A := A)
+      (x := x) (secParam := secParam) ε) :
+    ∑ rand ∈ S,
+        ∑ α ∈ successfulChallenges VC cs A x secParam
+            (commitTupleOfRandomness VC cs A x secParam rand),
+          heavyCommitChallengeWeight VC cs A x secParam ε rand α
+      ≥ ENNReal.ofReal ε * (Fintype.card F : ENNReal)⁻¹ *
+          ∑ rand ∈ S, heavyCommitSeedWeight VC cs A x secParam ε rand := by
+  classical
+  set c := ENNReal.ofReal ε * (Fintype.card F : ENNReal)⁻¹
+  have h_aux :
+      ∀ rand ∈ S,
+        heavyCommitSeedWeight VC cs A x secParam ε rand * c ≤
+          ∑ α ∈ successfulChallenges VC cs A x secParam
+              (commitTupleOfRandomness VC cs A x secParam rand),
+            heavyCommitChallengeWeight VC cs A x secParam ε rand α := by
+    intro rand h_rand
+    have h_mem : commitTupleOfRandomness VC cs A x secParam rand ∈
+        heavyCommitments VC cs A x secParam ε := by
+      have h_rand_heavy : rand ∈ heavyRandomnessFinset (VC := VC) (cs := cs) (A := A)
+          (x := x) (secParam := secParam) ε := h_subset h_rand
+      exact (mem_heavyRandomnessFinset (VC := VC) (cs := cs) (A := A)
+          (x := x) (secParam := secParam) (ε := ε) (rand := rand)).1 h_rand_heavy
+    have := heavyCommitChallengeWeight_sum_successfulChallenges_ge
+      (VC := VC) (cs := cs) (A := A) (x := x) (secParam := secParam)
+      (ε := ε) (rand := rand) h_mem
+    simpa [c, mul_comm, mul_left_comm, mul_assoc]
+      using this
+  have h_sum_le :=
+    Finset.sum_le_sum fun rand h_rand => h_aux rand h_rand
+  have h_left_eq :
+      ∑ rand ∈ S, heavyCommitSeedWeight VC cs A x secParam ε rand * c =
+        c * ∑ rand ∈ S, heavyCommitSeedWeight VC cs A x secParam ε rand := by
+    have h_mul_sum :=
+      (Finset.mul_sum (s := S)
+          (f := fun rand => heavyCommitSeedWeight VC cs A x secParam ε rand) c)
+    simpa [mul_comm, mul_left_comm, mul_assoc] using h_mul_sum.symm
+  have h_goal :
+      c * ∑ rand ∈ S, heavyCommitSeedWeight VC cs A x secParam ε rand ≤
+        ∑ rand ∈ S,
+            ∑ α ∈ successfulChallenges VC cs A x secParam
+                (commitTupleOfRandomness VC cs A x secParam rand),
+              heavyCommitChallengeWeight VC cs A x secParam ε rand α := by
+    simpa [c, h_left_eq] using h_sum_le
+  simpa [c, mul_comm, mul_left_comm, mul_assoc] using h_goal
+
 lemma successfulChallenges_card_ge_of_heavyCommitment
     {F : Type} [Field F] [Fintype F] [DecidableEq F]
     (VC : VectorCommitment F) (cs : R1CS F) (A : Adversary F VC)
