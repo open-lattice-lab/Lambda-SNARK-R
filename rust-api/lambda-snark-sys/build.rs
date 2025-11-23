@@ -4,28 +4,57 @@ use std::path::PathBuf;
 fn main() {
     println!("cargo:rerun-if-changed=../../cpp-core/include");
     println!("cargo:rerun-if-changed=../../cpp-core/src");
-    
-    // Build C++ core with CMake
-    let dst = cmake::Config::new("../../cpp-core")
+    println!("cargo:rerun-if-env-changed=VCPKG_ROOT");
+    println!("cargo:rerun-if-env-changed=SEAL_DIR");
+
+    // Link SEAL (from vcpkg) - check environment variable or default location
+    let vcpkg_root = env::var("VCPKG_ROOT").unwrap_or_else(|_| {
+        if PathBuf::from("/home/kirill/vcpkg").exists() {
+            "/home/kirill/vcpkg".to_string()
+        } else {
+            "../../vcpkg".to_string()
+        }
+    });
+
+    // Build C++ core with CMake (vcpkg toolchain if available)
+    let mut config = cmake::Config::new("../../cpp-core");
+    config
         .define("CMAKE_BUILD_TYPE", "Release")
         .define("LAMBDA_SNARK_BUILD_TESTS", "OFF")
-        .define("LAMBDA_SNARK_BUILD_BENCHMARKS", "OFF")
-        .build();
-    
+        .define("LAMBDA_SNARK_BUILD_BENCHMARKS", "OFF");
+
+    let toolchain = PathBuf::from(&vcpkg_root)
+        .join("scripts")
+        .join("buildsystems")
+        .join("vcpkg.cmake");
+    if toolchain.exists() {
+        config
+            .define("CMAKE_TOOLCHAIN_FILE", toolchain.to_string_lossy().to_string())
+            .define("VCPKG_TARGET_TRIPLET", "x64-linux")
+            .define("VCPKG_FEATURE_FLAGS", "manifests")
+            .env("VCPKG_ROOT", &vcpkg_root);
+    }
+
+    let seal_dir = PathBuf::from(&vcpkg_root)
+        .join("installed")
+        .join("x64-linux")
+        .join("share")
+        .join("seal");
+    if seal_dir.exists() {
+        config.define("SEAL_DIR", seal_dir.to_string_lossy().to_string());
+    }
+
+    let dst = config.build();
+
     println!("cargo:rustc-link-search=native={}/lib", dst.display());
     println!("cargo:rustc-link-search=native={}/lib64", dst.display());
+
+    let cmake_vcpkg = dst.join("build").join("vcpkg_installed").join("x64-linux").join("lib");
+    if cmake_vcpkg.exists() {
+        println!("cargo:rustc-link-search=native={}", cmake_vcpkg.display());
+    }
+
     println!("cargo:rustc-link-lib=static=lambda_snark_core");
-    
-    // Link SEAL (from vcpkg) - check environment variable or default location
-    let vcpkg_root = env::var("VCPKG_ROOT")
-        .unwrap_or_else(|_| {
-            // Try common locations
-            if PathBuf::from("/home/kirill/vcpkg").exists() {
-                "/home/kirill/vcpkg".to_string()
-            } else {
-                "../../vcpkg".to_string()
-            }
-        });
     let vcpkg_lib = PathBuf::from(format!("{}/installed/x64-linux/lib", vcpkg_root));
     if vcpkg_lib.exists() {
         println!("cargo:rustc-link-search=native={}", vcpkg_lib.display());
@@ -34,10 +63,14 @@ fn main() {
     } else {
         eprintln!("Warning: vcpkg SEAL library not found at {}, using system libraries only", vcpkg_lib.display());
     }
-    println!("cargo:rustc-link-lib=dylib=z");  // system zlib
-    println!("cargo:rustc-link-lib=dylib=ntl");  // system NTL
-    println!("cargo:rustc-link-lib=dylib=gmp");  // system GMP (NTL dependency)
-    
+    println!("cargo:rustc-link-lib=dylib=z"); // system zlib
+    println!("cargo:rustc-link-lib=dylib=ntl"); // system NTL
+    println!("cargo:rustc-link-lib=dylib=gmp"); // system GMP (NTL dependency)
+    println!("cargo:rustc-link-lib=dylib=pthread");
+    if cfg!(target_os = "linux") {
+        println!("cargo:rustc-link-lib=dylib=m");
+    }
+
     // Link C++ standard library
     let target = env::var("TARGET").unwrap();
     if target.contains("apple") {

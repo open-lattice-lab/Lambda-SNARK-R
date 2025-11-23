@@ -3,8 +3,6 @@
 use crate::{CoreError, Error};
 use lambda_snark_core::{Params, Profile};
 use lambda_snark_sys as ffi;
-use std::ptr;
-
 /// Safe wrapper for LWE context.
 pub struct LweContext {
     inner: *mut ffi::LweContext,

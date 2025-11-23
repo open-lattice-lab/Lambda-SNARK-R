@@ -1,14 +1,11 @@
 /**
  * @file test_commitment.cpp
- * @brief UnitTEST_F(CommitmentTest, CommitDeterministic) {
-    // Deterministic encryption: same seed → same commitment
-    uint64_t message[] = {1, 2, 3};
-    size_t msg_len = 3;
-    uint64_t seed = 0xDEADBEEF;ts for LWE commitment.
+ * @brief Unit tests for the LWE commitment API.
  */
 
 #include "lambda_snark/commitment.h"
 #include <gtest/gtest.h>
+#include <vector>
 
 class CommitmentTest : public ::testing::Test {
 protected:
@@ -60,7 +57,8 @@ TEST_F(CommitmentTest, CommitBinding) {
     
     ASSERT_NE(comm1, nullptr);
     ASSERT_NE(comm2, nullptr);
-    ASSERT_EQ(comm1->len, comm2->len);
+    ASSERT_GT(comm1->len, 0);
+    ASSERT_GT(comm2->len, 0);
     
     // Different messages → commitments should differ (with overwhelming probability)
     bool different = false;
@@ -114,5 +112,55 @@ TEST_F(CommitmentTest, NullPointerHandling) {
     lwe_commitment_free(nullptr);
 }
 
-// TODO: Add tests for verify_opening once implemented
-// TODO: Add tests for linear_combine once implemented
+TEST_F(CommitmentTest, VerifyOpeningMatchesMessage) {
+    uint64_t message[] = {7, 11, 13, 17};
+    const size_t msg_len = std::size(message);
+
+    auto comm = lwe_commit(ctx, message, msg_len, 0);
+    ASSERT_NE(comm, nullptr);
+
+    uint64_t randomness = 0;
+    LweOpening opening{&randomness, 1};
+
+    EXPECT_EQ(lwe_verify_opening(ctx, comm, message, msg_len, &opening), 1);
+
+    std::vector<uint64_t> wrong(message, message + msg_len);
+    wrong[1] ^= 1U;
+    EXPECT_EQ(lwe_verify_opening(ctx, comm, wrong.data(), msg_len, &opening), 0);
+
+    lwe_commitment_free(comm);
+}
+
+TEST_F(CommitmentTest, LinearCombinationProducesExpectedCommitment) {
+    const size_t msg_len = 4;
+    uint64_t msg1[msg_len] = {1, 2, 3, 4};
+    uint64_t msg2[msg_len] = {5, 6, 7, 8};
+
+    auto comm1 = lwe_commit(ctx, msg1, msg_len, 0);
+    auto comm2 = lwe_commit(ctx, msg2, msg_len, 0);
+    ASSERT_NE(comm1, nullptr);
+    ASSERT_NE(comm2, nullptr);
+
+    const LweCommitment* inputs[] = {comm1, comm2};
+    uint64_t coeffs[] = {2, 3};
+
+    auto combined = lwe_linear_combine(ctx, inputs, coeffs, 2);
+    ASSERT_NE(combined, nullptr);
+
+    uint64_t expected[msg_len];
+    for (size_t i = 0; i < msg_len; ++i) {
+        expected[i] = coeffs[0] * msg1[i] + coeffs[1] * msg2[i];
+    }
+
+    uint64_t randomness = 0;
+    LweOpening opening{&randomness, 1};
+
+    EXPECT_EQ(lwe_verify_opening(ctx, combined, expected, msg_len, &opening), 1);
+
+    expected[0] += 1;
+    EXPECT_EQ(lwe_verify_opening(ctx, combined, expected, msg_len, &opening), 0);
+
+    lwe_commitment_free(comm1);
+    lwe_commitment_free(comm2);
+    lwe_commitment_free(combined);
+}

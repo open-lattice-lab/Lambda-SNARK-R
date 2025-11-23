@@ -2,7 +2,6 @@
 //!
 //! This module provides polynomial representation and evaluation for witness encoding.
 
-use crate::Error;
 use lambda_snark_core::Field;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;

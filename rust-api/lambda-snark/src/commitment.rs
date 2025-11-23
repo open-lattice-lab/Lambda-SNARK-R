@@ -3,10 +3,9 @@
 use crate::{CoreError, Error, LweContext};
 use lambda_snark_core::Field;
 use lambda_snark_sys as ffi;
-use serde::de::{self, SeqAccess, Visitor};
+use serde::de;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::slice;
-use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// LWE commitment (safe wrapper).
 #[derive(Debug)]
@@ -16,10 +15,11 @@ pub struct Commitment {
 
 impl Clone for Commitment {
     fn clone(&self) -> Self {
-        // Clone by extracting data and reconstructing
-        // For now, this is a shallow copy (unsafe but matches C++ semantics)
-        // TODO: Implement proper deep copy via FFI if needed
-        Commitment { inner: self.inner }
+        let inner = unsafe { ffi::lwe_commitment_clone(self.as_ffi_ptr()) };
+        if inner.is_null() {
+            panic!("lwe_commitment_clone returned null");
+        }
+        Commitment { inner }
     }
 }
 
@@ -35,6 +35,42 @@ impl Commitment {
         }
 
         Ok(Commitment { inner })
+    }
+
+    /// Compute linear combination of commitments with scalar coefficients.
+    pub fn linear_combine(
+        ctx: &LweContext,
+        commitments: &[&Commitment],
+        coeffs: &[Field],
+    ) -> Result<Self, Error> {
+        if commitments.is_empty() {
+            return Err(Error::InvalidInput("no commitments provided".into()));
+        }
+
+        if commitments.len() != coeffs.len() {
+            return Err(Error::InvalidInput("commitments/coeffs length mismatch".into()));
+        }
+
+        let mut ptrs: Vec<*const ffi::LweCommitment> = commitments
+            .iter()
+            .map(|c| c.as_ffi_ptr())
+            .collect();
+        let coeff_words: Vec<u64> = coeffs.iter().map(|f| f.value()).collect();
+
+        let combined = unsafe {
+            ffi::lwe_linear_combine(
+                ctx.as_ptr(),
+                ptrs.as_mut_ptr(),
+                coeff_words.as_ptr(),
+                ptrs.len(),
+            )
+        };
+
+        if combined.is_null() {
+            return Err(Error::Core(CoreError::CommitmentFailed));
+        }
+
+        Ok(Commitment { inner: combined })
     }
 
     /// Get commitment data as bytes.
@@ -91,6 +127,7 @@ impl<'de> Deserialize<'de> for Commitment {
 mod tests {
     use super::*;
     use lambda_snark_core::{Params, Profile, SecurityLevel};
+    use std::ptr;
 
     #[test]
     fn test_commitment_create() {
@@ -109,5 +146,54 @@ mod tests {
 
         let comm = Commitment::new(&ctx, &message, 0x1234);
         assert!(comm.is_ok());
+    }
+
+    #[test]
+    fn test_linear_combination_roundtrip() {
+        let params = Params::new(
+            SecurityLevel::Bits128,
+            Profile::RingB {
+                n: 4096,
+                k: 2,
+                q: 17592186044417,
+                sigma: 3.19,
+            },
+        );
+
+        let ctx = LweContext::new(params).unwrap();
+        let msg_len = 4;
+        let msg1: Vec<Field> = (0..msg_len).map(|i| Field::new(i as u64 + 1)).collect();
+        let msg2: Vec<Field> = (0..msg_len).map(|i| Field::new((i as u64 + 1) * 2)).collect();
+
+        let comm1 = Commitment::new(&ctx, &msg1, 0).unwrap();
+        let comm2 = Commitment::new(&ctx, &msg2, 1).unwrap();
+
+        let coeffs = vec![Field::new(2), Field::new(3)];
+        let inputs = [&comm1, &comm2];
+
+        let combined = Commitment::linear_combine(&ctx, &inputs, &coeffs).unwrap();
+
+        let expected: Vec<u64> = msg1
+            .iter()
+            .zip(msg2.iter())
+            .map(|(a, b)| 2 * a.value() + 3 * b.value())
+            .collect();
+
+        let opening = ffi::LweOpening {
+            randomness: ptr::null_mut(),
+            rand_len: 0,
+        };
+
+        let valid = unsafe {
+            ffi::lwe_verify_opening(
+                ctx.as_ptr(),
+                combined.as_ffi_ptr(),
+                expected.as_ptr(),
+                expected.len(),
+                &opening,
+            )
+        };
+
+        assert_eq!(valid, 1, "homomorphic combination should match expected message");
     }
 }

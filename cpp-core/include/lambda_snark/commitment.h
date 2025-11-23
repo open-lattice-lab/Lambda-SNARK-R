@@ -70,6 +70,14 @@ LweCommitment* lwe_commit(
 void lwe_commitment_free(LweCommitment* comm) noexcept;
 
 /**
+ * @brief Clone commitment (deep copy of serialized payload).
+ *
+ * @param comm Commitment to clone.
+ * @return Newly allocated commitment or NULL on failure.
+ */
+LweCommitment* lwe_commitment_clone(const LweCommitment* comm) noexcept;
+
+/**
  * @brief Verify opening of commitment (constant-time).
  * 
  * Recomputes commitment and checks equality using constant-time comparison.

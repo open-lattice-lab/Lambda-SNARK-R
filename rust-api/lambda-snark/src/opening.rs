@@ -2,7 +2,7 @@
 //!
 //! Implements opening generation and verification for ΛSNARK-R.
 
-use crate::{Commitment, Error, LweContext, Polynomial};
+use crate::{Commitment, LweContext, Polynomial};
 use lambda_snark_core::Field;
 use lambda_snark_sys as ffi;
 use serde::{Deserialize, Serialize};
@@ -151,9 +151,8 @@ pub fn generate_opening(polynomial: &Polynomial, alpha: Field, randomness: u64) 
 /// let alpha = Field::new(12345);
 /// let opening = generate_opening(&polynomial, alpha, 0x1234);
 ///
-/// // NOTE: This test currently fails due to SEAL non-deterministic randomness
 /// let valid = verify_opening_with_context(&commitment, alpha, &opening, modulus, &ctx);
-/// // assert!(valid, "Valid opening should verify"); // TODO: Fix when deterministic mode added
+/// assert!(valid, "Valid opening should verify");
 /// # Ok(())
 /// # }
 /// ```
@@ -323,7 +322,7 @@ mod tests {
 
     #[test]
     fn test_opening_correctness() {
-        // Valid opening should verify
+        // Valid opening should verify against C++ commitment backend
         let ctx = test_context();
 
         let polynomial = Polynomial::from_witness(&[1, 7, 13, 91], TEST_MODULUS);
@@ -333,8 +332,8 @@ mod tests {
         let alpha = Field::new(12345);
         let opening = generate_opening(&polynomial, alpha, randomness);
 
-        let valid = verify_opening(&commitment, alpha, &opening, TEST_MODULUS);
-        assert!(valid, "Valid opening should verify");
+        let valid = verify_opening_with_context(&commitment, alpha, &opening, TEST_MODULUS, &ctx);
+        assert!(valid, "Valid opening should verify via LWE backend");
     }
 
     #[test]

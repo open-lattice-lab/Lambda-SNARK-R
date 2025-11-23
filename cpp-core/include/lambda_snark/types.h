@@ -29,8 +29,10 @@ typedef struct LweContext LweContext;
 /**
  * @brief LWE commitment structure (FFI-safe).
  * 
- * Layout: flat array of uint64_t elements representing polynomial coefficients
- * in the cyclotomic ring R_q = Z_q[X]/(X^n + 1).
+ * Layout: flat array of uint64_t words. When Microsoft SEAL is available the
+ * first word stores the byte-length of the serialized ciphertext, and the
+ * remaining words contain the serialized payload. In stub mode the array holds
+ * raw coefficients.
  */
 typedef struct {
     uint64_t* data;  ///< Pointer to commitment data (caller must free)

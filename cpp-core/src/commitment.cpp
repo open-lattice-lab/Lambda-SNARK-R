@@ -1,137 +1,167 @@
 /**
  * @file commitment.cpp
  * @brief Implementation of LWE commitment scheme.
- * 
- * Uses Microsoft SEAL for efficient BFV encryption as the underlying
- * commitment mechanism. Falls back to basic implementation if SEAL unavailable.
- * 
- * @copyright Copyright (c) 2025 URPKS Contributors
- * @license Apache-2.0 OR MIT
+ *
+ * Provides Module-LWE commitments backed by Microsoft SEAL primitives when
+ * available. Falls back to stubbed behaviour if SEAL is not present.
  */
 
 #include "lambda_snark/commitment.h"
+
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <cstdio>
+#include <new>
 #include <memory>
+#include <sstream>
+#include <utility>
+#include <vector>
 
-// Conditional SEAL inclusion
 #ifdef HAVE_SEAL
 #include <seal/seal.h>
-#include <random>
-using namespace seal;
 #endif
 
-// Conditional libsodium inclusion
 #ifdef HAVE_SODIUM
 #include <sodium.h>
 #endif
 
-// Internal implementation
 struct LweContext {
 #ifdef HAVE_SEAL
-    std::unique_ptr<SEALContext> seal_ctx;
-    std::unique_ptr<PublicKey> pk;
-    std::unique_ptr<SecretKey> sk;
-    std::unique_ptr<Encryptor> encryptor;
-    std::unique_ptr<Decryptor> decryptor;
+    std::shared_ptr<seal::SEALContext> seal_ctx;
+    std::unique_ptr<seal::PublicKey> pk;
+    std::unique_ptr<seal::SecretKey> sk;
+    std::unique_ptr<seal::Encryptor> encryptor;
+    std::unique_ptr<seal::Decryptor> decryptor;
+    std::unique_ptr<seal::BatchEncoder> encoder;
+    std::unique_ptr<seal::Evaluator> evaluator;
 #endif
     PublicParams params;
 };
+
+#ifdef HAVE_SEAL
+namespace {
+
+LweCommitment* ciphertext_to_commitment(const seal::Ciphertext& cipher) {
+    std::stringstream ss(std::ios::binary | std::ios::out | std::ios::in);
+    cipher.save(ss);
+    const std::string blob = ss.str();
+    const std::size_t byte_len = blob.size();
+    const std::size_t word_len = (byte_len + sizeof(uint64_t) - 1) / sizeof(uint64_t);
+
+    auto comm = new LweCommitment;
+    comm->len = word_len + 1;
+    comm->data = new uint64_t[comm->len];
+
+    comm->data[0] = static_cast<uint64_t>(byte_len);
+    std::memset(comm->data + 1, 0, word_len * sizeof(uint64_t));
+    std::memcpy(comm->data + 1, blob.data(), byte_len);
+
+    return comm;
+}
+
+bool commitment_to_ciphertext(
+    const LweContext* ctx,
+    const LweCommitment* commitment,
+    seal::Ciphertext& out_cipher
+) {
+    if (!ctx || !commitment || commitment->len < 1) {
+        return false;
+    }
+
+    const uint64_t byte_len = commitment->data[0];
+    const std::size_t available_bytes = (commitment->len - 1) * sizeof(uint64_t);
+    if (byte_len == 0 || byte_len > available_bytes) {
+        return false;
+    }
+
+    const char* blob_ptr = reinterpret_cast<const char*>(commitment->data + 1);
+    std::string blob(blob_ptr, blob_ptr + byte_len);
+
+    std::stringstream ss(std::ios::binary | std::ios::in | std::ios::out);
+    ss.write(blob.data(), static_cast<std::streamsize>(blob.size()));
+    ss.seekg(0);
+
+    out_cipher.load(*ctx->seal_ctx, ss);
+    return true;
+}
+
+seal::Plaintext encode_coefficient(const LweContext* ctx, uint64_t coeff) {
+    const auto plain_modulus = ctx->seal_ctx->first_context_data()->parms().plain_modulus().value();
+    coeff %= plain_modulus;
+
+    std::vector<uint64_t> coeff_vec(ctx->encoder->slot_count(), coeff);
+    seal::Plaintext plain;
+    ctx->encoder->encode(coeff_vec, plain);
+    return plain;
+}
+
+}  // namespace
+#endif  // HAVE_SEAL
 
 extern "C" {
 
 LweContext* lwe_context_create(const PublicParams* params) noexcept try {
     if (!params) return nullptr;
-    
+
     auto ctx = std::make_unique<LweContext>();
     ctx->params = *params;
-    
+
 #ifdef HAVE_SEAL
-    // Initialize SEAL context
-    EncryptionParameters seal_params(scheme_type::bfv);
+    seal::EncryptionParameters seal_params(seal::scheme_type::bfv);
     seal_params.set_poly_modulus_degree(params->ring_degree);
-    
-    // Setup coefficient modulus chain
-    seal_params.set_coeff_modulus(
-        CoeffModulus::BFVDefault(params->ring_degree)
-    );
-    
-    // Use batching-friendly prime for plain_modulus
-    seal_params.set_plain_modulus(PlainModulus::Batching(params->ring_degree, 20));
-    
-    ctx->seal_ctx = std::make_unique<SEALContext>(seal_params);
-    
-    // Generate keys
-    KeyGenerator keygen(*ctx->seal_ctx);
-    ctx->sk = std::make_unique<SecretKey>(keygen.secret_key());
-    ctx->pk = std::make_unique<PublicKey>();
+    seal_params.set_coeff_modulus(seal::CoeffModulus::BFVDefault(params->ring_degree));
+    seal_params.set_plain_modulus(seal::PlainModulus::Batching(params->ring_degree, 20));
+
+    ctx->seal_ctx = std::make_shared<seal::SEALContext>(seal_params);
+    if (!ctx->seal_ctx) {
+        return nullptr;
+    }
+
+    seal::KeyGenerator keygen(*ctx->seal_ctx);
+    ctx->sk = std::make_unique<seal::SecretKey>(keygen.secret_key());
+    ctx->pk = std::make_unique<seal::PublicKey>();
     keygen.create_public_key(*ctx->pk);
-    
-    ctx->encryptor = std::make_unique<Encryptor>(*ctx->seal_ctx, *ctx->pk);
-    ctx->decryptor = std::make_unique<Decryptor>(*ctx->seal_ctx, *ctx->sk);
-#else
-    // Stub implementation (for build without SEAL)
-    // TODO: Implement basic LWE commitment
+
+    ctx->encryptor = std::make_unique<seal::Encryptor>(*ctx->seal_ctx, *ctx->pk, *ctx->sk);
+    ctx->decryptor = std::make_unique<seal::Decryptor>(*ctx->seal_ctx, *ctx->sk);
+    ctx->encoder = std::make_unique<seal::BatchEncoder>(*ctx->seal_ctx);
+    ctx->evaluator = std::make_unique<seal::Evaluator>(*ctx->seal_ctx);
 #endif
-    
+
     return ctx.release();
 } catch (const std::exception& e) {
-    // Log error (in production, use proper logging)
-    fprintf(stderr, "lwe_context_create error: %s\n", e.what());
+    std::fprintf(stderr, "lwe_context_create error: %s\n", e.what());
     return nullptr;
 }
 
 void lwe_context_free(LweContext* ctx) noexcept {
-    if (ctx) {
-        // SEAL resources cleaned up by unique_ptr destructors
-        delete ctx;
-    }
+    delete ctx;
 }
 
 LweCommitment* lwe_commit(
     LweContext* ctx,
     const uint64_t* message,
     size_t msg_len,
-    uint64_t seed
+    uint64_t /*seed*/
 ) noexcept try {
     if (!ctx || !message) return nullptr;
-    
+
 #ifdef HAVE_SEAL
-    // Encode message as plaintext
-    BatchEncoder encoder(*ctx->seal_ctx);
-    size_t slot_count = encoder.slot_count();
-    
-    // Pad message to fit slot count
+    const std::size_t slot_count = ctx->encoder->slot_count();
     std::vector<uint64_t> msg_vec(slot_count, 0);
-    size_t copy_len = (msg_len < slot_count) ? msg_len : slot_count;
+    const std::size_t copy_len = std::min(msg_len, slot_count);
     std::copy_n(message, copy_len, msg_vec.begin());
-    
-    Plaintext plain;
-    encoder.encode(msg_vec, plain);
-    
-    // Encrypt (= commit) using public key
-    Ciphertext cipher;
-    ctx->encryptor->encrypt(plain, cipher);
-    
-    // Convert to flat representation
-    auto comm = new LweCommitment;
-    comm->len = cipher.size() * cipher.poly_modulus_degree();
-    comm->data = new uint64_t[comm->len];
-    
-    size_t offset = 0;
-    for (size_t i = 0; i < cipher.size(); ++i) {
-        std::copy_n(
-            cipher.data(i),
-            cipher.poly_modulus_degree(),
-            comm->data + offset
-        );
-        offset += cipher.poly_modulus_degree();
-    }
-    
-    return comm;
+
+    seal::Plaintext plain;
+    ctx->encoder->encode(msg_vec, plain);
+
+    seal::Ciphertext cipher;
+    ctx->encryptor->encrypt_symmetric(plain, cipher);
+
+    return ciphertext_to_commitment(cipher);
 #else
-    // Stub: return dummy commitment
     auto comm = new LweCommitment;
     comm->len = msg_len;
     comm->data = new uint64_t[msg_len];
@@ -139,26 +169,45 @@ LweCommitment* lwe_commit(
     return comm;
 #endif
 } catch (const std::exception& e) {
-    fprintf(stderr, "lwe_commit error: %s\n", e.what());
+    std::fprintf(stderr, "lwe_commit error: %s\n", e.what());
     return nullptr;
 } catch (...) {
-    fprintf(stderr, "lwe_commit error: unknown exception\n");
+    std::fprintf(stderr, "lwe_commit error: unknown exception\n");
     return nullptr;
 }
 
 void lwe_commitment_free(LweCommitment* comm) noexcept {
-    if (comm) {
-        if (comm->data) {
-            // Zeroize before freeing
+    if (!comm) return;
+    if (comm->data) {
 #ifdef HAVE_SODIUM
-            sodium_memzero(comm->data, comm->len * sizeof(uint64_t));
+        sodium_memzero(comm->data, comm->len * sizeof(uint64_t));
 #else
-            std::memset(comm->data, 0, comm->len * sizeof(uint64_t));
+        std::memset(comm->data, 0, comm->len * sizeof(uint64_t));
 #endif
-            delete[] comm->data;
-        }
-        delete comm;
+        delete[] comm->data;
     }
+    delete comm;
+}
+
+LweCommitment* lwe_commitment_clone(const LweCommitment* comm) noexcept {
+    if (!comm || comm->len == 0 || !comm->data) {
+        return nullptr;
+    }
+
+    auto clone = new (std::nothrow) LweCommitment;
+    if (!clone) {
+        return nullptr;
+    }
+
+    clone->len = comm->len;
+    clone->data = new (std::nothrow) uint64_t[clone->len];
+    if (!clone->data) {
+        delete clone;
+        return nullptr;
+    }
+
+    std::memcpy(clone->data, comm->data, clone->len * sizeof(uint64_t));
+    return clone;
 }
 
 int lwe_verify_opening(
@@ -166,47 +215,38 @@ int lwe_verify_opening(
     const LweCommitment* commitment,
     const uint64_t* message,
     size_t msg_len,
-    const LweOpening* opening
-) noexcept {
-    if (!ctx || !commitment || !message || !opening) return -1;
-    
-    // Extract seed from opening randomness
-    // Format: randomness[0] = seed (u64)
-    uint64_t seed = 0;
-    if (opening->randomness && opening->rand_len > 0) {
-        seed = opening->randomness[0];
+    const LweOpening* /*opening*/
+) noexcept try {
+    if (!ctx || !commitment || !message) return -1;
+
+#ifdef HAVE_SEAL
+    seal::Ciphertext cipher;
+    if (!commitment_to_ciphertext(ctx, commitment, cipher)) {
+        return -1;
     }
-    
-    // Recompute commitment with same randomness
-    auto recomputed = lwe_commit(
-        const_cast<LweContext*>(ctx),
-        message,
-        msg_len,
-        seed
-    );
-    
-    if (!recomputed) return -1;
-    
-    // Constant-time comparison
-    int result = 0;
-#ifdef HAVE_SODIUM
-    result = (sodium_memcmp(
-        commitment->data,
-        recomputed->data,
-        commitment->len * sizeof(uint64_t)
-    ) == 0) ? 1 : 0;
+
+    seal::Plaintext plain;
+    ctx->decryptor->decrypt(cipher, plain);
+
+    std::vector<uint64_t> decoded;
+    ctx->encoder->decode(plain, decoded);
+    if (decoded.size() < msg_len) {
+        return 0;
+    }
+
+    uint64_t diff = 0;
+    for (size_t i = 0; i < msg_len; ++i) {
+        diff |= (decoded[i] ^ message[i]);
+    }
+
+    return diff == 0 ? 1 : 0;
 #else
-    // Fallback: timing-safe comparison (not truly constant-time without libsodium)
-    // TODO: Implement proper constant-time comparison
-    result = (std::memcmp(
-        commitment->data,
-        recomputed->data,
-        commitment->len * sizeof(uint64_t)
-    ) == 0) ? 1 : 0;
+    if (!commitment->data) return 0;
+    return (std::memcmp(commitment->data, message, msg_len * sizeof(uint64_t)) == 0) ? 1 : 0;
 #endif
-    
-    lwe_commitment_free(recomputed);
-    return result;
+} catch (const std::exception& e) {
+    std::fprintf(stderr, "lwe_verify_opening error: %s\n", e.what());
+    return -1;
 }
 
 LweCommitment* lwe_linear_combine(
@@ -214,9 +254,50 @@ LweCommitment* lwe_linear_combine(
     const LweCommitment** commitments,
     const uint64_t* coeffs,
     size_t count
-) noexcept {
-    // TODO: Implement homomorphic linear combination
-    // For SEAL: add scaled ciphertexts
+) noexcept try {
+#ifdef HAVE_SEAL
+    if (!ctx || !commitments || !coeffs || count == 0) {
+        return nullptr;
+    }
+
+    seal::Ciphertext accumulator;
+    bool has_value = false;
+
+    for (size_t i = 0; i < count; ++i) {
+        if (!commitments[i]) {
+            continue;
+        }
+
+        seal::Ciphertext term;
+        if (!commitment_to_ciphertext(ctx, commitments[i], term)) {
+            return nullptr;
+        }
+
+        seal::Plaintext coeff_plain = encode_coefficient(ctx, coeffs[i]);
+        ctx->evaluator->multiply_plain_inplace(term, coeff_plain);
+
+        if (!has_value) {
+            accumulator = std::move(term);
+            has_value = true;
+        } else {
+            ctx->evaluator->add_inplace(accumulator, term);
+        }
+    }
+
+    if (!has_value) {
+        return nullptr;
+    }
+
+    return ciphertext_to_commitment(accumulator);
+#else
+    (void)ctx;
+    (void)commitments;
+    (void)coeffs;
+    (void)count;
+    return nullptr;
+#endif
+} catch (const std::exception& e) {
+    std::fprintf(stderr, "lwe_linear_combine error: %s\n", e.what());
     return nullptr;
 }
 
