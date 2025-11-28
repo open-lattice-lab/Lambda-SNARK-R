@@ -4,45 +4,74 @@
 [![Security policy](https://img.shields.io/badge/security-disclosure-blue.svg)](SECURITY.md)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE-APACHE)
 
-ΛSNARK-R is a research-first implementation of a post-quantum, zero-knowledge Λ-style succinct SNARK: Rust prover, C++ commitment kernel (Microsoft SEAL), and an in-progress Lean 4 formal verification layer. The goal is a reproducible argument system backed by Module-LWE assumptions with high assurance.
+ΛSNARK-R is a research-first implementation of a post-quantum, zero-knowledge Λ-style succinct SNARK. It translates R1CS statements into reproducible proofs backed by Module-LWE commitments, pairing a Rust prover with a constant-time-oriented C++ commitment kernel. The stack integrates a Lean 4 formal verification layer so that protocol proofs and code evolve together under open review. ΛSNARK-R targets verifiable computing workloads that require transparent, auditable infrastructure while remaining an open research collaboration.
 
-> Project status: **Alpha / M7 stabilization** — suitable for experimentation, not production-ready.
+## Project Status
+- **Stage:** Alpha, under active development.
+- Interfaces and performance are still evolving; not production-ready.
 
----
+## 🚀 Quick Start
+1. Clone the workspace:
+   ```bash
+   git clone https://github.com/SafeAGI-lab/Lambda-SNARK-R.git
+   cd Lambda-SNARK-R
+   ```
+2. Bootstrap dependencies (Rust toolchains, vcpkg, Lean):
+   ```bash
+   ./scripts/setup.sh
+   ```
+3. Build the Rust crates and C++ core:
+   ```bash
+   cargo build --manifest-path rust-api/Cargo.toml --workspace
+   cmake -S cpp-core -B cpp-core/build -G Ninja
+   cmake --build cpp-core/build
+   ```
+4. Run a CLI proof generation example:
+   ```bash
+   cargo run -p lambda-snark-cli --release -- healthcare \
+     --input test-vectors/tv-0-linear-system/input.json
+   # Produces artifacts/r1cs/healthcare.term
+   ```
 
-## Highlights (M7)
-- R1CS→ΛSNARK pipeline with dual Fiat–Shamir challenges.
-- Microsoft SEAL commitments exposed via safe Rust FFI and CLI workflows.
-- Lean project `formal/` with completed soundness proof and active zero-knowledge development.
-- Deterministic test vectors and a healthcare walkthrough that emit Lean artifacts.
-- Constant-time discrete Gaussian sampler and modular arithmetic dudect sweeps (`artifacts/dudect/`).
+## 🎯 Use Cases
+- Blockchain protocols that need post-quantum, succinct attestations for R1CS circuits.
+- Privacy-preserving analytics pipelines (e.g., healthcare datasets) with deterministic artifacts.
+- Verifiable computing backends that integrate Rust, C++, and formal proofs in one stack.
+- Benchmarking and evaluating discrete Gaussian samplers under dudect timing analyses.
+- Academic explorations of Module-LWE–based SNARK constructions with reproducible proofs.
 
----
+## Highlights
+- R1CS→ΛSNARK pipeline with dual Fiat–Shamir challenges and deterministic transcripts.
+- Rust prover with audited FFI into Microsoft SEAL commitments and CLI workflows.
+- C++ kernel tuned for NTT-friendly modulus 17592169062401 with precomputed roots.
+- Lean 4 project (`formal/`) with completed soundness proof and active zero-knowledge work.
+- Deterministic test vectors and walkthroughs that emit Lean and R1CS artifacts for review.
+- Constant-time discrete Gaussian sampler plus dudect sweeps stored under `artifacts/dudect/`.
+- Cross-language CI covering Rust, C++, and Lean layers through GitHub Actions.
 
-## Layout
+## Architecture Overview
+```mermaid
+flowchart LR
+    RustAPI["Rust API crates"] --> Core["C++ commitment kernel"]
+    Core --> Formal["Lean 4 formal layer"]
+    RustAPI --> CLI["CLI / Examples"]
+    RustAPI --> Tests["Tests & Artifacts"]
+    Formal --> Tests
+```
+
+## Repository Layout
 ```
 .
 ├── rust-api/           # Crates: lambda-snark, core, cli, sys
 ├── cpp-core/           # C++ NTT + commitments (SEAL)
 ├── formal/             # Lake + Lean 4 proofs
-├── docs/               # MkDocs site, architecture notes
+├── docs/               # MkDocs site and architecture notes
 ├── test-vectors/       # Canonical inputs/outputs
-├── artifacts/          # Generated Lean/R1CS artifacts
+├── artifacts/          # Generated Lean/R1CS artifacts and dudect reports
 └── scripts/            # Bootstrap and CI helpers
 ```
 
----
-
-## Getting Started
-
-### Prerequisites
-- Rust 1.77+ (`rustup`, add `clippy`, `rustfmt`).
-- C++20 toolchain, CMake 3.26+, Ninja (recommended).
-- vcpkg (`./scripts/setup.sh`) for Microsoft SEAL dependencies.
-- Python 3.11+ for docs and automation.
-- Lean 4 via Lake (`formal/lean-toolchain`).
-
-### Build & Test
+## Build & Test
 ```bash
 # Rust workspace
 cd rust-api
@@ -55,59 +84,47 @@ cmake -S . -B build -G Ninja
 cmake --build build
 ctest --test-dir build
 
-# Dudect-style timing sanity check
+# Timing sanity checks
 cmake --build build --target dudect_sampler
 ./build/dudect_sampler  # writes artifacts/dudect/gaussian_sampler_report.md
-
-# Modular arithmetic timing sweep
 cargo run --manifest-path ../rust-api/Cargo.toml \
-  -p lambda-snark --bin mod_arith_timing
-# writes artifacts/dudect/mod_arith_report.md (add/sub/pow/inverse)
-cargo run -p lambda-snark --bin mod_arith_timing \
-  # writes artifacts/dudect/mod_arith_report.md (add/sub/pow/inverse)
+  -p lambda-snark --bin mod_arith_timing  # writes artifacts/dudect/mod_arith_report.md
 
 # Lean proofs
 cd ../formal
 lake build LambdaSNARK
 ```
 
-### CLI Example
+## CLI Example
 ```bash
 cargo run -p lambda-snark-cli --release -- healthcare \
   --input ../test-vectors/tv-0-linear-system/input.json
-# Output: artifacts/r1cs/healthcare.term (treat as sensitive if witnesses are real).
+# Output: artifacts/r1cs/healthcare.term (treat as sensitive if witnesses are real)
 ```
 
-See `PROJECT_SETUP.md` and `TESTING.md` for extended guidance.
-
----
+See `docs/index.md` and `TESTING.md` for extended guidance and continuous integration policies.
 
 ## Current Capabilities
-- NTT-friendly modulus 17592169062401 (M7.2) with precomputed roots of unity.
-- Zero-knowledge blinding (M5.2) validated via simulator tests.
-- 150+ unit/integration checks across Rust, C++, and Lean layers; healthcare shared module in sync.
-- Lean build (`lake build`) succeeds; soundness theorem proven in `formal/` (M8), zero-knowledge proof underway.
-
----
+- Verified NTT arithmetic and modulus swap (M7.2) aligned across Rust and C++ components.
+- Zero-knowledge blinding (M5.2) validated via simulator-based regression tests.
+- 150+ unit, integration, and property tests spanning Rust, C++, and Lean layers.
+- Healthcare walkthrough provides end-to-end proof generation with exported Lean artifacts.
+- Lake-based Lean build produces the soundness theorem and supporting lemmas in `formal/`.
 
 ## Limitations
-- Modular arithmetic is not constant-time (timing leakage) until M7.5.
-- FFI sanitizers and fuzzing harnesses are queued (Q1 2026).
-- External audit (Trail of Bits/NCC Group) planned for M10.
-- Lean zero-knowledge proof is still in progress (`formal/`); soundness is proven (M8).
+- Modular arithmetic is not yet constant-time; dudect-guided rewrites land in M7.5.
+- FFI sanitizers and fuzzing harnesses are pending (target milestones M8–M9).
+- Lean zero-knowledge proof scripts remain under construction for M9 delivery.
+- External security audit and deployment hardening are scheduled for M10.
 
-Risk register and mitigations are tracked in `SECURITY.md`.
-
----
+All limitations are tracked as roadmap items for milestones M7–M10.
 
 ## Standards
-- Run `cargo fmt` and `cargo clippy --workspace --all-targets`.
-- Execute `cargo test -p lambda-snark --no-run` before PRs.
-- C++ checks: `ctest --test-dir cpp-core/build`.
-- Lean: `lake build LambdaSNARK`.
-- Do not commit sensitive artifacts outside `artifacts/`.
-
----
+- Run `cargo fmt` and `cargo clippy --workspace --all-targets` before submitting changes.
+- Execute `cargo test -p lambda-snark --no-run` to validate workspace compilation.
+- For C++ updates, run `ctest --test-dir cpp-core/build`.
+- For Lean updates, run `lake build LambdaSNARK`.
+- Do not commit sensitive witnesses or artifacts outside `artifacts/`.
 
 ## Roadmap (excerpt)
 - ✅ M5.1: O(m log m) NTT implementation.
@@ -121,19 +138,15 @@ Risk register and mitigations are tracked in `SECURITY.md`.
 
 Full milestone map lives in `ROADMAP.md`.
 
----
-
 ## Community
 - Issues: GitHub tracker (non-security).
-- Security: follow `SECURITY.md` (email, PGP).
-- Discussions: GitHub Discussions, SafeAGI Zulip `#lambda-snark`.
-- Contributing: read `CONTRIBUTING.md`; security-sensitive changes need dual review.
-
----
+- Security disclosures: follow `SECURITY.md` (email, PGP).
+- Discussions: GitHub Discussions and SafeAGI Zulip `#lambda-snark`.
+- Contributing: see `CONTRIBUTING.md`; security-sensitive changes need dual review.
 
 ## License
 Dual-licensed under [MIT](LICENSE-MIT) and [Apache-2.0](LICENSE-APACHE); contributions imply agreement with both.
 
 ---
 
-Last updated: 2025-11-23
+Last updated: 2025-11-28
