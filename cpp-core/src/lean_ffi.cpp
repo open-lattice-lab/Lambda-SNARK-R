@@ -16,22 +16,25 @@
 #include <iomanip>
 #include <cstring>
 
-// Conditional SEAL inclusion
-#ifdef HAVE_SEAL
 #include <seal/seal.h>
 using namespace seal;
+
+#ifndef HAVE_SEAL
+#error "Lambda-SNARK requires Microsoft SEAL; configure the build with SEAL support."
+#endif
 
 // Forward declare LweContext internals (defined in commitment.cpp)
 // This allows access to SEAL context without full definition
 struct LweContext {
-    std::unique_ptr<SEALContext> seal_ctx;
+    std::shared_ptr<SEALContext> seal_ctx;
     std::unique_ptr<PublicKey> pk;
     std::unique_ptr<SecretKey> sk;
     std::unique_ptr<Encryptor> encryptor;
     std::unique_ptr<Decryptor> decryptor;
+    std::unique_ptr<BatchEncoder> encoder;
+    std::unique_ptr<Evaluator> evaluator;
     PublicParams params;
 };
-#endif
 
 namespace {
 
@@ -73,7 +76,6 @@ std::string public_params_to_lean(const PublicParams* params) {
     return oss.str();
 }
 
-#ifdef HAVE_SEAL
 /**
  * @brief Export SEAL EncryptionParameters to Lean format.
  * 
@@ -127,7 +129,6 @@ std::string seal_pubkey_to_base64(const PublicKey& pk, const SEALContext& ctx) {
         return "";
     }
 }
-#endif
 
 } // anonymous namespace
 
@@ -228,7 +229,6 @@ int export_params_to_lean(
     }
 }
 
-#ifdef HAVE_SEAL
 /**
  * @brief Export SEAL context to Lean format (EXPERIMENTAL).
  * 
@@ -312,6 +312,5 @@ int export_seal_pubkey_to_lean(
         return -1;
     }
 }
-#endif
 
 } // extern "C"

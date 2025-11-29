@@ -36,6 +36,8 @@ cd ../..
 
 > **Note:** `vcpkg` builds `gmp` from source and requires system autotools (`autoconf`, `automake`, `libtool`). Install them before running `vcpkg install`.
 
+> **Requirement:** Microsoft SEAL is mandatory. CMake configuration fails if `SEAL::seal` is not discoverable.
+
 Or install system packages:
 
 ```bash
@@ -158,7 +160,7 @@ cpp-core/
 - **FFI Safety**: All public functions are `extern "C"` and `noexcept`.
 - **Memory Management**: Caller must free returned pointers (e.g., `lwe_commitment_free`).
 - **Constant-Time**: Critical functions (verification) use constant-time operations.
-- **Stub Implementation**: Some functions are stubs pending full implementation.
+- **In-Progress Modules**: `lincheck.cpp` and `mulcheck.cpp` remain placeholders pending Phase 2.
 
 ## Next Steps
 

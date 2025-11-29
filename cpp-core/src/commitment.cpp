@@ -2,8 +2,7 @@
  * @file commitment.cpp
  * @brief Implementation of LWE commitment scheme.
  *
- * Provides Module-LWE commitments backed by Microsoft SEAL primitives when
- * available. Falls back to stubbed behaviour if SEAL is not present.
+ * Provides Module-LWE commitments backed by Microsoft SEAL primitives.
  */
 
 #include "lambda_snark/commitment.h"
@@ -19,8 +18,10 @@
 #include <utility>
 #include <vector>
 
-#ifdef HAVE_SEAL
 #include <seal/seal.h>
+
+#ifndef HAVE_SEAL
+#error "Lambda-SNARK requires Microsoft SEAL; configure the build with SEAL support."
 #endif
 
 #ifdef HAVE_SODIUM
@@ -28,7 +29,6 @@
 #endif
 
 struct LweContext {
-#ifdef HAVE_SEAL
     std::shared_ptr<seal::SEALContext> seal_ctx;
     std::unique_ptr<seal::PublicKey> pk;
     std::unique_ptr<seal::SecretKey> sk;
@@ -36,11 +36,9 @@ struct LweContext {
     std::unique_ptr<seal::Decryptor> decryptor;
     std::unique_ptr<seal::BatchEncoder> encoder;
     std::unique_ptr<seal::Evaluator> evaluator;
-#endif
     PublicParams params;
 };
 
-#ifdef HAVE_SEAL
 namespace {
 
 LweCommitment* ciphertext_to_commitment(const seal::Ciphertext& cipher) {
@@ -98,7 +96,6 @@ seal::Plaintext encode_coefficient(const LweContext* ctx, uint64_t coeff) {
 }
 
 }  // namespace
-#endif  // HAVE_SEAL
 
 extern "C" {
 
@@ -108,7 +105,6 @@ LweContext* lwe_context_create(const PublicParams* params) noexcept try {
     auto ctx = std::make_unique<LweContext>();
     ctx->params = *params;
 
-#ifdef HAVE_SEAL
     seal::EncryptionParameters seal_params(seal::scheme_type::bfv);
     seal_params.set_poly_modulus_degree(params->ring_degree);
     seal_params.set_coeff_modulus(seal::CoeffModulus::BFVDefault(params->ring_degree));
@@ -128,7 +124,6 @@ LweContext* lwe_context_create(const PublicParams* params) noexcept try {
     ctx->decryptor = std::make_unique<seal::Decryptor>(*ctx->seal_ctx, *ctx->sk);
     ctx->encoder = std::make_unique<seal::BatchEncoder>(*ctx->seal_ctx);
     ctx->evaluator = std::make_unique<seal::Evaluator>(*ctx->seal_ctx);
-#endif
 
     return ctx.release();
 } catch (const std::exception& e) {
@@ -148,7 +143,6 @@ LweCommitment* lwe_commit(
 ) noexcept try {
     if (!ctx || !message) return nullptr;
 
-#ifdef HAVE_SEAL
     const std::size_t slot_count = ctx->encoder->slot_count();
     std::vector<uint64_t> msg_vec(slot_count, 0);
     const std::size_t copy_len = std::min(msg_len, slot_count);
@@ -161,13 +155,6 @@ LweCommitment* lwe_commit(
     ctx->encryptor->encrypt_symmetric(plain, cipher);
 
     return ciphertext_to_commitment(cipher);
-#else
-    auto comm = new LweCommitment;
-    comm->len = msg_len;
-    comm->data = new uint64_t[msg_len];
-    std::copy_n(message, msg_len, comm->data);
-    return comm;
-#endif
 } catch (const std::exception& e) {
     std::fprintf(stderr, "lwe_commit error: %s\n", e.what());
     return nullptr;
@@ -219,7 +206,6 @@ int lwe_verify_opening(
 ) noexcept try {
     if (!ctx || !commitment || !message) return -1;
 
-#ifdef HAVE_SEAL
     seal::Ciphertext cipher;
     if (!commitment_to_ciphertext(ctx, commitment, cipher)) {
         return -1;
@@ -240,10 +226,6 @@ int lwe_verify_opening(
     }
 
     return diff == 0 ? 1 : 0;
-#else
-    if (!commitment->data) return 0;
-    return (std::memcmp(commitment->data, message, msg_len * sizeof(uint64_t)) == 0) ? 1 : 0;
-#endif
 } catch (const std::exception& e) {
     std::fprintf(stderr, "lwe_verify_opening error: %s\n", e.what());
     return -1;
@@ -255,7 +237,6 @@ LweCommitment* lwe_linear_combine(
     const uint64_t* coeffs,
     size_t count
 ) noexcept try {
-#ifdef HAVE_SEAL
     if (!ctx || !commitments || !coeffs || count == 0) {
         return nullptr;
     }
@@ -289,13 +270,6 @@ LweCommitment* lwe_linear_combine(
     }
 
     return ciphertext_to_commitment(accumulator);
-#else
-    (void)ctx;
-    (void)commitments;
-    (void)coeffs;
-    (void)count;
-    return nullptr;
-#endif
 } catch (const std::exception& e) {
     std::fprintf(stderr, "lwe_linear_combine error: %s\n", e.what());
     return nullptr;

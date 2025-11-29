@@ -29,10 +29,9 @@ typedef struct LweContext LweContext;
 /**
  * @brief LWE commitment structure (FFI-safe).
  * 
- * Layout: flat array of uint64_t words. When Microsoft SEAL is available the
- * first word stores the byte-length of the serialized ciphertext, and the
- * remaining words contain the serialized payload. In stub mode the array holds
- * raw coefficients.
+ * Layout: flat array of uint64_t words. The first word stores the byte-length
+ * of the serialized ciphertext, and the remaining words contain the payload
+ * produced by Microsoft SEAL.
  */
 typedef struct {
     uint64_t* data;  ///< Pointer to commitment data (caller must free)

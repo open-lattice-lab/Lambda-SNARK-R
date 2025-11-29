@@ -121,8 +121,9 @@ echo ""
 echo -e "${CYAN}Testing build...${NC}"
 echo -e "${YELLOW}Building C++ core...${NC}"
 cd cpp-core
-if cmake -B build -DCMAKE_BUILD_TYPE=Release -DLAMBDA_SNARK_BUILD_TESTS=ON 2>&1 | grep -q "SEAL not found"; then
-    echo -e "${YELLOW}⚠️  SEAL not found (expected for now, using stubs)${NC}"
+if ! cmake -B build -DCMAKE_BUILD_TYPE=Release -DLAMBDA_SNARK_BUILD_TESTS=ON; then
+    echo -e "${RED}❌ CMake configuration failed. Ensure Microsoft SEAL is installed and available via CMake (e.g., vcpkg install seal).${NC}"
+    exit 1
 fi
 cmake --build build || echo -e "${YELLOW}⚠️  C++ build had warnings (OK for now)${NC}"
 cd ..

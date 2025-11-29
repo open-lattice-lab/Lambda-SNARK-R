@@ -55,10 +55,7 @@ endif()
 find_package(PkgConfig QUIET)
 
 # Microsoft SEAL (FHE library)
-find_package(SEAL 4.1 QUIET)
-if(NOT SEAL_FOUND)
-    message(STATUS "SEAL not found, will use vcpkg or manual install")
-endif()
+find_package(SEAL 4.1 CONFIG REQUIRED)
 
 find_package(GMP QUIET)
 if(NOT GMP_FOUND)
@@ -118,12 +115,10 @@ target_include_directories(lambda_snark_core
 )
 
 # Link dependencies
-if(SEAL_FOUND)
-    target_link_libraries(lambda_snark_core PUBLIC SEAL::seal)
-    target_compile_definitions(lambda_snark_core PRIVATE HAVE_SEAL)
+target_link_libraries(lambda_snark_core PUBLIC SEAL::seal)
+target_compile_definitions(lambda_snark_core PRIVATE HAVE_SEAL)
+if(DEFINED SEAL_VERSION)
     message(STATUS "SEAL found: ${SEAL_VERSION}")
-else()
-    message(WARNING "SEAL not found; commitment.cpp will use stub implementation")
 endif()
 
 if(GMP_FOUND)
@@ -247,11 +242,15 @@ install(FILES
 
 # --- Summary ---
 message(STATUS "")
+set(SEAL_SUMMARY "found")
+if(DEFINED SEAL_VERSION)
+    set(SEAL_SUMMARY ${SEAL_VERSION})
+endif()
 message(STATUS "ΛSNARK-R C++ Core Configuration:")
 message(STATUS "  Version:      ${PROJECT_VERSION}")
 message(STATUS "  Build type:   ${CMAKE_BUILD_TYPE}")
 message(STATUS "  C++ standard: ${CMAKE_CXX_STANDARD}")
-message(STATUS "  SEAL found:   ${SEAL_FOUND}")
+message(STATUS "  SEAL version: ${SEAL_SUMMARY}")
 message(STATUS "  GMP found:    ${GMP_FOUND}")
 message(STATUS "  Eigen3 found: ${Eigen3_FOUND}")
 message(STATUS "  Sodium found: ${sodium_FOUND}")
