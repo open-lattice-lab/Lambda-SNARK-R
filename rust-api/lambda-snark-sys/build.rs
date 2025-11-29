@@ -1,5 +1,25 @@
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+fn link_from_dir(lib_dir: &Path, lib: &str, fallback: &str) {
+    let static_lib = lib_dir.join(format!("lib{}.a", lib));
+    if static_lib.exists() {
+        println!("cargo:rustc-link-lib=static={}", lib);
+        return;
+    }
+
+    let shared_exts = ["so", "dylib", "dll"];
+    if shared_exts
+        .iter()
+        .map(|ext| lib_dir.join(format!("lib{}.{}", lib, ext)))
+        .any(|candidate| candidate.exists())
+    {
+        println!("cargo:rustc-link-lib=dylib={}", lib);
+        return;
+    }
+
+    println!("cargo:rustc-link-lib={}", fallback);
+}
 
 fn main() {
     println!("cargo:rerun-if-changed=../../cpp-core/include");
@@ -67,6 +87,8 @@ fn main() {
         println!("cargo:rustc-link-search=native={}", vcpkg_lib.display());
         println!("cargo:rustc-link-lib=static=seal-4.1");
         println!("cargo:rustc-link-lib=static=zstd");
+        link_from_dir(&vcpkg_lib, "ntl", "ntl");
+        link_from_dir(&vcpkg_lib, "gmp", "gmp");
     } else {
         eprintln!(
             "Warning: vcpkg SEAL library not found at {}, using system libraries only",
@@ -74,8 +96,10 @@ fn main() {
         );
     }
     println!("cargo:rustc-link-lib=dylib=z"); // system zlib
-    println!("cargo:rustc-link-lib=dylib=ntl"); // system NTL
-    println!("cargo:rustc-link-lib=dylib=gmp"); // system GMP (NTL dependency)
+    if !vcpkg_lib.exists() {
+        println!("cargo:rustc-link-lib=dylib=ntl"); // system NTL
+        println!("cargo:rustc-link-lib=dylib=gmp"); // system GMP (NTL dependency)
+    }
     println!("cargo:rustc-link-lib=dylib=pthread");
     if cfg!(target_os = "linux") {
         println!("cargo:rustc-link-lib=dylib=m");

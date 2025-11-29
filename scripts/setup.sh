@@ -105,7 +105,7 @@ else
     echo -e "${YELLOW}⚠️  vcpkg not found. Clone manually for C++ dependencies:${NC}"
     echo -e "  git clone https://github.com/microsoft/vcpkg.git"
     echo -e "  ./vcpkg/bootstrap-vcpkg.sh"
-    echo -e "  ./vcpkg/vcpkg install seal ntl gtest benchmark"
+    echo -e "  ./vcpkg/vcpkg install seal ntl gmp gtest benchmark"
 fi
 echo ""
 

@@ -21,7 +21,14 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake ninja-build libgtest-dev libgmp-dev libeigen3-dev libsodium-dev
+        sudo apt-get install -y \
+          cmake \
+          ninja-build \
+          libgtest-dev \
+          libgmp-dev \
+          libeigen3-dev \
+          libsodium-dev \
+          libntl-dev
     
     - name: Configure
       working-directory: cpp-core
@@ -67,11 +74,16 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake libgmp-dev libeigen3-dev libsodium-dev
+        sudo apt-get install -y \
+          cmake \
+          libgmp-dev \
+          libeigen3-dev \
+          libsodium-dev \
+          libntl-dev
     
     - name: Install C++ dependencies (macOS)
       if: matrix.os == 'macos-latest'
-      run: brew install cmake gmp eigen libsodium
+      run: brew install cmake gmp eigen libsodium ntl
     
     - name: Check formatting
       working-directory: rust-api
@@ -113,7 +125,12 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake libgmp-dev libeigen3-dev libsodium-dev
+        sudo apt-get install -y \
+          cmake \
+          libgmp-dev \
+          libeigen3-dev \
+          libsodium-dev \
+          libntl-dev
     
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable

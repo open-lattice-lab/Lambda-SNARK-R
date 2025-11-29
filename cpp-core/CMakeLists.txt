@@ -78,7 +78,7 @@ find_package(Eigen3 3.4 QUIET)
 find_package(sodium QUIET)
 
 # NTL (number theory library)
-find_package(NTL QUIET)
+find_package(NTL CONFIG QUIET)
 if(NOT NTL_FOUND)
     find_library(NTL_LIBRARY NAMES ntl)
     find_path(NTL_INCLUDE_DIR NAMES NTL/ZZ_p.h)
@@ -90,6 +90,10 @@ if(NOT NTL_FOUND)
         )
         set(NTL_FOUND TRUE)
     endif()
+endif()
+
+if(NOT NTL_FOUND)
+    message(FATAL_ERROR "NTL not found; install via vcpkg (ntl) or provide system headers/libraries")
 endif()
 
 # --- Library: lambda_snark_core ---
@@ -137,11 +141,7 @@ if(sodium_FOUND)
     target_link_libraries(lambda_snark_core PRIVATE sodium)
 endif()
 
-if(NTL_FOUND)
-    target_link_libraries(lambda_snark_core PUBLIC NTL::ntl)
-else()
-    message(WARNING "NTL not found; R1CS functionality will be unavailable")
-endif()
+target_link_libraries(lambda_snark_core PUBLIC NTL::ntl)
 
 # Enable PIC for shared library
 set_target_properties(lambda_snark_core PROPERTIES
