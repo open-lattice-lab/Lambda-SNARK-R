@@ -28,11 +28,24 @@ jobs:
           libgmp-dev \
           libeigen3-dev \
           libsodium-dev \
-          libntl-dev
+          libntl-dev \
+          autoconf \
+          automake \
+          libtool
+
+    - name: Bootstrap vcpkg
+      run: |
+        ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+        ./vcpkg/vcpkg install --triplet x64-linux
     
     - name: Configure
       working-directory: cpp-core
-      run: cmake -B build -GNinja -DCMAKE_BUILD_TYPE=Release -DLAMBDA_SNARK_BUILD_TESTS=ON
+      run: cmake -B build -GNinja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DLAMBDA_SNARK_BUILD_TESTS=ON \
+        -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake \
+        -DVCPKG_TARGET_TRIPLET=x64-linux \
+        -DVCPKG_FEATURE_FLAGS=manifests
     
     - name: Build
       working-directory: cpp-core
@@ -76,14 +89,27 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y \
           cmake \
+          ninja-build \
           libgmp-dev \
           libeigen3-dev \
           libsodium-dev \
-          libntl-dev
+          libntl-dev \
+          autoconf \
+          automake \
+          libtool
+
+    - name: Bootstrap vcpkg dependencies
+      run: |
+        ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+        if [ "${{ matrix.os }}" = "macos-latest" ]; then
+          ./vcpkg/vcpkg install --triplet x64-osx
+        else
+          ./vcpkg/vcpkg install --triplet x64-linux
+        fi
     
     - name: Install C++ dependencies (macOS)
       if: matrix.os == 'macos-latest'
-      run: brew install cmake gmp eigen libsodium ntl
+      run: brew install cmake ninja gmp eigen libsodium ntl
     
     - name: Check formatting
       working-directory: rust-api
@@ -127,10 +153,19 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y \
           cmake \
+          ninja-build \
           libgmp-dev \
           libeigen3-dev \
           libsodium-dev \
-          libntl-dev
+          libntl-dev \
+          autoconf \
+          automake \
+          libtool
+
+    - name: Bootstrap vcpkg
+      run: |
+        ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+        ./vcpkg/vcpkg install --triplet x64-linux
     
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
